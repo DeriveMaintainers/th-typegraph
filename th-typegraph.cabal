@@ -29,7 +29,8 @@ library
     th-desugar,
     th-orphans >= 0.10.0
   ghc-options:      -Wall
-  exposed-modules:  Language.Haskell.TH.TypeGraph.Core
+  exposed-modules:  Language.Haskell.TH.TypeGraph
+                    Language.Haskell.TH.TypeGraph.Core
                     Language.Haskell.TH.TypeGraph.Edges
                     Language.Haskell.TH.TypeGraph.Expand
                     Language.Haskell.TH.TypeGraph.Graph
