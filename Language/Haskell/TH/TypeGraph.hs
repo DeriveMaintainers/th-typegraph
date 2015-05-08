@@ -6,7 +6,7 @@ module Language.Haskell.TH.TypeGraph
     , module Language.Haskell.TH.TypeGraph.Hints
     , module Language.Haskell.TH.TypeGraph.Info
     , module Language.Haskell.TH.TypeGraph.Monad
-    , module Language.Haskell.TH.TypeGraph.Unsafe
+    -- , module Language.Haskell.TH.TypeGraph.Unsafe
     , module Language.Haskell.TH.TypeGraph.Vertex
     ) where
 
@@ -17,5 +17,5 @@ import Language.Haskell.TH.TypeGraph.Graph
 import Language.Haskell.TH.TypeGraph.Hints
 import Language.Haskell.TH.TypeGraph.Info
 import Language.Haskell.TH.TypeGraph.Monad
-import Language.Haskell.TH.TypeGraph.Unsafe
+import Language.Haskell.TH.TypeGraph.Unsafe ()
 import Language.Haskell.TH.TypeGraph.Vertex

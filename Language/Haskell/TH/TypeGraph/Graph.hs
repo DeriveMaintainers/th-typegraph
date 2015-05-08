@@ -29,9 +29,11 @@ type GraphEdges v = Map v (Set v)
 cutVertex :: (Eq a, Ord a) => a -> GraphEdges a -> GraphEdges a
 cutVertex victim edges = Map.map (Set.filter (/= victim)) $ Map.filterWithKey (\k _ -> k /= victim) edges
 
+-- | Cut vertices for which the predicate returns False
 cutVertices :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges a -> GraphEdges a
 cutVertices victim edges = List.foldr cutVertex edges (List.filter victim (Map.keys edges))
 
+-- | Cut vertices for which the predicate returns False
 cutVerticesM :: (Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges a -> m (GraphEdges a)
 cutVerticesM victim edges = do
   victims <- filterM victim (Map.keys edges) >>= return . Set.fromList
