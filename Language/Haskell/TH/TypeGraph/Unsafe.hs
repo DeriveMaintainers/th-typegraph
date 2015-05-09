@@ -9,14 +9,14 @@
 module Language.Haskell.TH.TypeGraph.Unsafe () where
 
 import Language.Haskell.TH (Pred, Type)
-import Language.Haskell.TH.TypeGraph.Expand (Expanded(markExpanded, runExpanded))
+import Language.Haskell.TH.TypeGraph.Expand (Expanded(markExpanded, runExpanded'))
 
 instance Expanded Type Type where
     markExpanded = id
-    runExpanded = id
+    runExpanded' = id
 
 #if !MIN_VERSION_template_haskell(2,10,0)
 instance Expanded Pred Pred where
     markExpanded = id
-    runExpanded = id
+    runExpanded' = id
 #endif

@@ -10,12 +10,15 @@ module Language.Haskell.TH.TypeGraph
     , module Language.Haskell.TH.TypeGraph.Vertex
     ) where
 
-import Language.Haskell.TH.TypeGraph.Core
-import Language.Haskell.TH.TypeGraph.Edges
-import Language.Haskell.TH.TypeGraph.Expand
-import Language.Haskell.TH.TypeGraph.Graph
-import Language.Haskell.TH.TypeGraph.Hints
-import Language.Haskell.TH.TypeGraph.Info
-import Language.Haskell.TH.TypeGraph.Monad
+import Language.Haskell.TH.TypeGraph.Core (FieldType(FieldType, fPos, fNameAndType), prettyField, fName, fType, typeArity, pprint')
+import Language.Haskell.TH.TypeGraph.Edges (TypeGraphEdges)
+import Language.Haskell.TH.TypeGraph.Expand (Expanded(markExpanded), runExpanded, E(E))
+import Language.Haskell.TH.TypeGraph.Graph (GraphEdges, graphFromMap,
+                                            cutVertex, cutVertices, cutVerticesM, mergeVertex, mergeVertices, mergeVerticesM)
+import Language.Haskell.TH.TypeGraph.Hints (VertexHint(Normal, Hidden, Sink, Divert, Extra))
+import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, expanded, fields, hints, infoMap, synonyms, typeSet,
+                                           emptyTypeGraphInfo, typeGraphInfo, withTypeGraphInfo)
+import Language.Haskell.TH.TypeGraph.Monad (typeVertex, fieldVertex, findEdges, typeGraphEdges, typeGraphVertices, typeGraph,
+                                            simpleEdges, simpleVertex, typeSynonymMap, typeSynonymMapSimple)
 import Language.Haskell.TH.TypeGraph.Unsafe ()
-import Language.Haskell.TH.TypeGraph.Vertex
+import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex, field, syns, etype, typeNames)

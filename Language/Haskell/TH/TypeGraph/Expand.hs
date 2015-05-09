@@ -21,8 +21,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Language.Haskell.TH.TypeGraph.Expand
-    ( Expanded(markExpanded, runExpanded)
-    , runExpanded'
+    ( Expanded(markExpanded, runExpanded')
+    , runExpanded
     , expandType
     , expandPred
     , expandClassP
@@ -42,7 +42,7 @@ import Prelude hiding (pred)
 -- specially marked expanded types or with the original types.
 class Expanded un ex | ex -> un where
     markExpanded :: un -> ex -- ^ Unsafely mark a value as expanded
-    runExpanded :: ex -> un -- ^ Strip mark off an expanded value
+    runExpanded' :: ex -> un -- ^ Strip mark off an expanded value
 
 -- | Apply the th-desugar expand function to a 'Type' and mark it as expanded.
 expandType :: (DsMonad m, Expanded Type e)  => Type -> m e
@@ -54,8 +54,8 @@ expandPred :: (DsMonad m, Expanded Pred e)  => Pred -> m e
 #if MIN_VERSION_template_haskell(2,10,0)
 expandPred = expandType
 #else
-expandPred (ClassP className typeParameters) = markExpanded <$> (ClassP className . map runExpanded') <$> mapM expandType typeParameters
-expandPred (EqualP type1 type2) = markExpanded <$> (EqualP <$> (runExpanded' <$> expandType type1) <*> (runExpanded' <$> expandType type2))
+expandPred (ClassP className typeParameters) = markExpanded <$> (ClassP className . map runExpanded) <$> mapM expandType typeParameters
+expandPred (EqualP type1 type2) = markExpanded <$> (EqualP <$> (runExpanded <$> expandType type1) <*> (runExpanded <$> expandType type2))
 #endif
 
 -- | Expand a list of 'Type' and build an expanded 'ClassP' 'Pred'.
@@ -64,23 +64,23 @@ expandClassP className typeParameters =
 #if MIN_VERSION_template_haskell(2,10,0)
       (expandType $ foldl AppT (ConT className) typeParameters) :: m e
 #else
-      (markExpanded . ClassP className . map runExpanded') <$> mapM expandType typeParameters
+      (markExpanded . ClassP className . map runExpanded) <$> mapM expandType typeParameters
 #endif
 
-runExpanded' :: Expanded a (E a) => E a -> a
-runExpanded' = runExpanded
+runExpanded :: Expanded a (E a) => E a -> a
+runExpanded = runExpanded'
 
 -- | A concrete type for which Expanded instances are declared below.
 newtype E a = E a deriving (Eq, Ord, Show)
 
 instance Expanded Type (E Type) where
     markExpanded = E
-    runExpanded (E x) = x
+    runExpanded' (E x) = x
 
 #if !MIN_VERSION_template_haskell(2,10,0)
 instance Expanded Pred (E Pred) where
     markExpanded = E
-    runExpanded (E x) = x
+    runExpanded' (E x) = x
 #endif
 
 instance Ppr a => Ppr (E a) where
