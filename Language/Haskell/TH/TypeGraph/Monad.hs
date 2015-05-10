@@ -13,6 +13,7 @@ module Language.Haskell.TH.TypeGraph.Monad
     ( findEdges
     , typeVertex
     , fieldVertex
+    , vertex
     -- , typeVertices
     , typeGraphEdges
     , typeGraphVertices
@@ -44,7 +45,7 @@ import Language.Haskell.TH.TypeGraph.Graph (cutVertex, GraphEdges, graphFromMap)
 import Language.Haskell.TH.TypeGraph.Edges (TypeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Hints (VertexHint(..))
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, expanded, fields, hints, infoMap, synonyms, typeSet)
-import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field, oldVertex)
+import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 
@@ -58,6 +59,11 @@ typeVertex etyp = do
 -- 'typeVertex' and then sets the _field value.
 fieldVertex :: MonadReader TypeGraphInfo m => E Type -> (Name, Name, Either Int Name) -> m TypeGraphVertex
 fieldVertex typ fld = typeVertex typ >>= \vertex -> return $ vertex {_field = Just fld}
+
+vertex :: MonadReader TypeGraphInfo m => Maybe Field -> Type -> m TypeGraphVertex
+vertex fld typ = do
+  em <- view expanded
+  maybe (typeVertex (em ! typ)) (fieldVertex (em ! typ)) fld
 
 -- | Return the set of vertices referred to by a hint's vertex - if
 -- field is Nothing it means all the fields with that type, if it is
@@ -79,24 +85,25 @@ fieldVertices v =
 -- fields of a record.
 typeGraphEdges :: forall m. (DsMonad m, MonadReader TypeGraphInfo m) => m TypeGraphEdges
 typeGraphEdges = do
-  findEdges >>= execStateT (view hints >>= mapM doHint')
+  findEdges >>= execStateT (view hints >>= mapM doHint)
     where
-      doHint' :: (Maybe Field, Type, VertexHint) -> StateT TypeGraphEdges m ()
-      doHint' (fld, typ, h) = do
-        doHint (fld, typ) h
-
-      doHint :: (Maybe Field, Type) -> VertexHint -> StateT TypeGraphEdges m ()
-      doHint v Sink = oldVertex v >>= fieldVertices >>= mapM_ (modify . Map.alter (\_ -> Just Set.empty)) . Set.toList
-      doHint _ Normal = return ()
-      doHint v Hidden = oldVertex v >>= fieldVertices >>= mapM_ (modify . cutVertex) . Set.toList
-      doHint v (Divert typ) = do
+      doHint (fld, typ, Sink) = do
+        v <- vertex fld typ
+        fieldVertices v >>= mapM_ (modify . Map.alter (\_ -> Just Set.empty)) . Set.toList
+      doHint (_, _, Normal) = return ()
+      doHint (fld, typ, Hidden) = do
+        v <- vertex fld typ
+        fieldVertices v >>= mapM_ (modify . cutVertex) . Set.toList
+      doHint (fld, typ, Divert typ') = do
         em <- view expanded
-        v' <- typeVertex (em ! typ)
-        oldVertex v >>= fieldVertices >>= mapM_ (modify . Map.alter (\_ -> Just (singleton v'))) . Set.toList
-      doHint v (Extra typ) = do
+        v <- vertex fld typ
+        v' <- typeVertex (em ! typ')
+        fieldVertices v >>= mapM_ (modify . Map.alter (\_ -> Just (singleton v'))) . Set.toList
+      doHint (fld, typ, Extra typ') = do
         em <- view expanded
-        v' <- typeVertex (em ! typ)
-        oldVertex v >>= fieldVertices >>= mapM_ (modify . Map.alter (\ mvs -> Just (Set.insert v' (fromMaybe Set.empty mvs)))) . Set.toList
+        v <- vertex fld typ
+        v' <- typeVertex (em ! typ')
+        fieldVertices v >>= mapM_ (modify . Map.alter (\ mvs -> Just (Set.insert v' (fromMaybe Set.empty mvs)))) . Set.toList
 
 -- | Find all the 'TypeGraphVertex' that involve this type.  All
 -- returned nodes will have the same set of type synonyms, but there
