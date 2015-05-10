@@ -30,7 +30,7 @@ import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
 import Language.Haskell.TH.TypeGraph.Core (pprint')
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
-import Language.Haskell.TH.TypeGraph.Hints (VertexHint(..))
+import Language.Haskell.TH.TypeGraph.Hints (VertexHint(..), hintType)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
@@ -151,11 +151,6 @@ typeGraphHint :: DsMonad m => TypeGraphVertex -> VertexHint -> StateT TypeGraphI
 typeGraphHint v h = do
   maybe (return ()) typeGraphInfo' (hintType h)
   hints %= Map.insertWith (++) v [h]
-    where
-      hintType :: VertexHint -> Maybe Type
-      hintType (Divert x) = Just x
-      hintType (Extra x) = Just x
-      hintType _ = Nothing
 
 -- | Build a TypeGraphInfo value by scanning the supplied types and hints.
 typeGraphInfo :: forall m. DsMonad m => [(TypeGraphVertex, VertexHint)] -> [Type] -> m TypeGraphInfo

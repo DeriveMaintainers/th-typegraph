@@ -11,6 +11,7 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.TH.TypeGraph.Hints
     ( VertexHint(..)
+    , hintType
     ) where
 
 import Data.Default (Default(def))
@@ -46,3 +47,8 @@ instance Ppr VertexHint where
     ppr Sink = ptext "Sink"
     ppr (Divert x) = hcat [ptext "Divert (", ppr x, ptext ")"]
     ppr (Extra x) = hcat [ptext "Extra (", ppr x, ptext ")"]
+
+hintType :: VertexHint -> Maybe Type
+hintType (Divert x) = Just x
+hintType (Extra x) = Just x
+hintType _ = Nothing

@@ -5,7 +5,7 @@
 module Language.Haskell.TH.TypeGraph.Core
     ( unReify
     , unReifyName
-     -- * Declaration shape
+    -- * Declaration shape
     , FieldType(FieldType, fPos, fNameAndType)
     , Field
     , fName
