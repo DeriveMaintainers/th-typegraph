@@ -70,6 +70,9 @@ instance Ppr FieldType where
 instance Ppr (Maybe Field, E Type) where
     ppr (mf, typ) = ptext $ pprint typ ++ maybe "" (\fld -> " (field " ++ pprint fld ++ ")") mf
 
+instance Ppr (Maybe Field, Type) where
+    ppr (mf, typ) = ptext $ pprint typ ++ " (unexpanded)" ++ maybe "" (\fld -> " (field " ++ pprint fld ++ ")") mf
+
 -- | fType' with leading foralls stripped
 fType :: FieldType -> Type
 fType = either (\ (_, x) -> x) (\ (_, _, x) -> x) . fNameAndType

@@ -29,7 +29,7 @@ import Data.Maybe (mapMaybe)
 import Data.Set as Set (insert, member, Set, singleton, toList, union)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
-import Language.Haskell.TH.TypeGraph.Core (pprint')
+import Language.Haskell.TH.TypeGraph.Core (Field, pprint')
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Hints (VertexHint(..), hintType)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex)
@@ -56,7 +56,7 @@ data TypeGraphInfo
       -- raw type and field values that are later used to construct
       -- the TypeGraphVertex, it is unsafe to do that until
       -- TypeGraphInfo is finalized.
-      , _hints :: [(TypeGraphVertex, VertexHint)]
+      , _hints :: [(Maybe Field, Type, VertexHint)]
       } deriving (Show, Eq, Ord)
 
 instance Ppr TypeGraphInfo where
@@ -68,7 +68,7 @@ instance Ppr TypeGraphInfo where
           ppe = intercalate "\n    " ("expanded:" : concatMap (lines . (\ (typ, (E etyp)) -> pprint typ ++ " -> " ++ pprint etyp)) (Map.toList e))
           pps = intercalate "\n    " ("synonyms:" : concatMap (lines . (\ (E etyp, ns) -> pprint etyp ++ " -> " ++ show ns)) (Map.toList s))
           ppf = intercalate "\n    " ("fields:" : concatMap (lines . (\ (E etyp, fs) -> pprint etyp ++ " -> " ++ show fs)) (Map.toList f))
-          pph = intercalate "\n    " ("hints:" : concatMap (lines . (\ (v, h) -> pprint v ++ " -> " ++ pprint h)) hs)
+          pph = intercalate "\n    " ("hints:" : concatMap (lines . (\ (fld, typ, h) -> pprint (fld, typ) ++ " -> " ++ pprint h)) hs)
 
 $(makeLenses ''TypeGraphInfo)
 
@@ -85,7 +85,7 @@ instance Lift TypeGraphInfo where
 emptyTypeGraphInfo :: TypeGraphInfo
 emptyTypeGraphInfo = TypeGraphInfo {_typeSet = mempty, _infoMap = mempty, _expanded = mempty, _synonyms = mempty, _fields = mempty, _hints = mempty}
 
-withTypeGraphInfo :: forall m a. DsMonad m => [(TypeGraphVertex, VertexHint)] -> [Type] -> ReaderT TypeGraphInfo m a -> m a
+withTypeGraphInfo :: forall m a. DsMonad m => [(Maybe Field, Type, VertexHint)] -> [Type] -> ReaderT TypeGraphInfo m a -> m a
 withTypeGraphInfo hintList types action = typeGraphInfo hintList types >>= runReaderT action
 
 -- | Collect the graph information for one type and all the types
@@ -144,11 +144,11 @@ collectTypeInfo typ0 = do
 
 -- | Add a hint to the TypeGraphInfo state and process any type it
 -- might contain.
-collectHintInfo :: DsMonad m => TypeGraphVertex -> VertexHint -> StateT TypeGraphInfo m ()
-collectHintInfo v h = hints %= (++ [(v, h)]) -- ((v, h) :)
+collectHintInfo :: DsMonad m => (Maybe Field, Type, VertexHint) -> StateT TypeGraphInfo m ()
+collectHintInfo (fld, typ, h) = hints %= (++ [(fld, typ, h)]) -- ((v, h) :)
 
 -- | Build a TypeGraphInfo value by scanning the supplied types and hints.
-typeGraphInfo :: forall m. DsMonad m => [(TypeGraphVertex, VertexHint)] -> [Type] -> m TypeGraphInfo
+typeGraphInfo :: forall m. DsMonad m => [(Maybe Field, Type, VertexHint)] -> [Type] -> m TypeGraphInfo
 typeGraphInfo hintList types = flip execStateT emptyTypeGraphInfo $ do
-  mapM_ collectTypeInfo (types ++ mapMaybe (hintType . view _2) hintList)
-  mapM_ (uncurry collectHintInfo) hintList
+  mapM_ collectTypeInfo (types ++ mapMaybe (hintType . view _3) hintList)
+  mapM_ collectHintInfo hintList

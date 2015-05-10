@@ -6,6 +6,7 @@ module Language.Haskell.TH.TypeGraph.Vertex
     , typeNames
     , typeVertex -- old
     , fieldVertex -- old
+    , oldVertex -- old
     ) where
 
 import Control.Lens -- (makeLenses, view)
@@ -17,7 +18,7 @@ import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (hcat, ptext)
 import Language.Haskell.TH.Syntax (Lift(lift))
-import Language.Haskell.TH.TypeGraph.Core (unReify, unReifyName)
+import Language.Haskell.TH.TypeGraph.Core (Field, unReify, unReifyName)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), runExpanded)
 
 -- | For simple type graphs always set _field and _synonyms to Nothing.
@@ -56,3 +57,7 @@ typeVertex :: DsMonad m => Type -> m TypeGraphVertex
 typeVertex typ = return $ TypeGraphVertex {_etype = E typ, _field = Nothing, _syns = Set.empty}
 fieldVertex :: DsMonad m => Type -> (Name, Name, Either Int Name) -> m TypeGraphVertex
 fieldVertex typ fld = return $ TypeGraphVertex {_etype = E typ, _field = Just fld, _syns = Set.empty}
+
+-- Transitional
+oldVertex :: DsMonad m => (Maybe Field, Type) -> m TypeGraphVertex
+oldVertex (fld, typ) = maybe (typeVertex typ) (fieldVertex typ) fld

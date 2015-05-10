@@ -38,12 +38,13 @@ import Data.Maybe (fromMaybe)
 import Data.Set as Set (delete, empty, fromList, insert, map, null, Set, singleton, toList, union)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
+import Language.Haskell.TH.TypeGraph.Core (Field)
 import Language.Haskell.TH.TypeGraph.Expand (E(E))
 import Language.Haskell.TH.TypeGraph.Graph (cutVertex, GraphEdges, graphFromMap)
 import Language.Haskell.TH.TypeGraph.Edges (TypeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Hints (VertexHint(..))
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, expanded, fields, hints, infoMap, synonyms, typeSet)
-import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field)
+import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field, oldVertex)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 
@@ -76,26 +77,26 @@ fieldVertices v =
 -- information from the vertex hints.  This means splitting the nodes
 -- according to record fields, because hints can refer to particular
 -- fields of a record.
-typeGraphEdges :: forall m. MonadReader TypeGraphInfo m => m TypeGraphEdges
+typeGraphEdges :: forall m. (DsMonad m, MonadReader TypeGraphInfo m) => m TypeGraphEdges
 typeGraphEdges = do
   findEdges >>= execStateT (view hints >>= mapM doHint')
     where
-      doHint' :: (TypeGraphVertex, VertexHint) -> StateT TypeGraphEdges m ()
-      doHint' (v, h) = do
-        doHint v h
+      doHint' :: (Maybe Field, Type, VertexHint) -> StateT TypeGraphEdges m ()
+      doHint' (fld, typ, h) = do
+        doHint (fld, typ) h
 
-      doHint :: TypeGraphVertex -> VertexHint -> StateT TypeGraphEdges m ()
-      doHint v Sink = fieldVertices v >>= mapM_ (modify . Map.alter (\_ -> Just Set.empty)) . Set.toList
+      doHint :: (Maybe Field, Type) -> VertexHint -> StateT TypeGraphEdges m ()
+      doHint v Sink = oldVertex v >>= fieldVertices >>= mapM_ (modify . Map.alter (\_ -> Just Set.empty)) . Set.toList
       doHint _ Normal = return ()
-      doHint v Hidden = fieldVertices v >>= mapM_ (modify . cutVertex) . Set.toList
+      doHint v Hidden = oldVertex v >>= fieldVertices >>= mapM_ (modify . cutVertex) . Set.toList
       doHint v (Divert typ) = do
         em <- view expanded
         v' <- typeVertex (em ! typ)
-        fieldVertices v >>= mapM_ (modify . Map.alter (\_ -> Just (singleton v'))) . Set.toList
+        oldVertex v >>= fieldVertices >>= mapM_ (modify . Map.alter (\_ -> Just (singleton v'))) . Set.toList
       doHint v (Extra typ) = do
         em <- view expanded
         v' <- typeVertex (em ! typ)
-        fieldVertices v >>= mapM_ (modify . Map.alter (\ mvs -> Just (Set.insert v' (fromMaybe Set.empty mvs)))) . Set.toList
+        oldVertex v >>= fieldVertices >>= mapM_ (modify . Map.alter (\ mvs -> Just (Set.insert v' (fromMaybe Set.empty mvs)))) . Set.toList
 
 -- | Find all the 'TypeGraphVertex' that involve this type.  All
 -- returned nodes will have the same set of type synonyms, but there
