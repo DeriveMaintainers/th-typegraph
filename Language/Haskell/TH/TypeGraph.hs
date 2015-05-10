@@ -10,7 +10,7 @@ module Language.Haskell.TH.TypeGraph
     , module Language.Haskell.TH.TypeGraph.Vertex
     ) where
 
-import Language.Haskell.TH.TypeGraph.Core (FieldType(FieldType, fPos, fNameAndType), prettyField, fName, fType, typeArity, pprint')
+import Language.Haskell.TH.TypeGraph.Core (FieldType(FieldType, fPos, fNameAndType), fName, fType, typeArity, pprint')
 import Language.Haskell.TH.TypeGraph.Edges (TypeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Expand (Expanded(markExpanded), runExpanded, E(E))
 import Language.Haskell.TH.TypeGraph.Graph (GraphEdges, graphFromMap,

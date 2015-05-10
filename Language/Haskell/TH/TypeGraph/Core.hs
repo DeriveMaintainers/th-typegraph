@@ -3,11 +3,13 @@
 {-# LANGUAGE CPP, DeriveDataTypeable, FlexibleInstances, RankNTypes, ScopedTypeVariables, TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.TH.TypeGraph.Core
-    ( -- * Declaration shape
-      FieldType(FieldType, fPos, fNameAndType)
+    ( unReify
+    , unReifyName
+     -- * Declaration shape
+    , FieldType(FieldType, fPos, fNameAndType)
+    , Field
     , fName
     , fType
-    , prettyField
     , constructorFields
     , foldShape
     -- * Constructor deconstructors
@@ -22,15 +24,18 @@ module Language.Haskell.TH.TypeGraph.Core
 #if __GLASGOW_HASKELL__ < 709
 import Control.Applicative ((<$>), (<*>))
 #endif
-import Data.Data (Data)
+import Data.Generics (Data, everywhere, mkT)
 import Data.Map as Map (Map, fromList, toList)
 import Data.Set as Set (Set, fromList, toList)
 import Data.Typeable (Typeable)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar ({- instances -})
+import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax
 import Language.Haskell.TH.TypeGraph.Expand (E, markExpanded, runExpanded)
+
+-- FieldType and Field should be merged, or made less rudundant.
 
 data FieldType
     = FieldType
@@ -38,11 +43,32 @@ data FieldType
       , fNameAndType :: Either StrictType VarStrictType }
     deriving (Eq, Ord, Show, Data, Typeable)
 
+type Field = ( Name, -- type name
+               Name, -- constructor name
+               Either Int -- field position
+                      Name -- field name
+             )
+
+instance Ppr Field where
+    ppr (tname, cname, field) = ptext $
+        "field " ++
+        show (unReifyName tname) ++ "." ++
+        either (\ n -> show (unReifyName cname) ++ "[" ++ show n ++ "]") (\ f -> show (unReifyName f)) field
+
+unReify :: Data a => a -> a
+unReify = everywhere (mkT unReifyName)
+
+unReifyName :: Name -> Name
+unReifyName = mkName . nameBase
+
 fName :: FieldType -> Maybe Name
 fName = either (\ (_, _) -> Nothing) (\ (x, _, _) -> Just x) . fNameAndType
 
-prettyField :: FieldType -> String
-prettyField fld = maybe (show (fPos fld)) nameBase (fName fld)
+instance Ppr FieldType where
+    ppr fld = ptext $ maybe (show (fPos fld)) nameBase (fName fld)
+
+instance Ppr (Maybe Field, E Type) where
+    ppr (mf, typ) = ptext $ pprint typ ++ maybe "" (\fld -> " (field " ++ pprint fld ++ ")") mf
 
 -- | fType' with leading foralls stripped
 fType :: FieldType -> Type

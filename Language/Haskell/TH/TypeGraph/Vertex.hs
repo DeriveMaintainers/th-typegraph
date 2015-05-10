@@ -9,7 +9,6 @@ module Language.Haskell.TH.TypeGraph.Vertex
     ) where
 
 import Control.Lens -- (makeLenses, view)
-import Data.Generics (Data, everywhere, mkT)
 import Data.List as List (concatMap, intersperse)
 import Data.Set as Set (empty, insert, Set, toList)
 import Language.Haskell.Exts.Syntax ()
@@ -18,7 +17,7 @@ import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (hcat, ptext)
 import Language.Haskell.TH.Syntax (Lift(lift))
-import Language.Haskell.TH.TypeGraph.Core ()
+import Language.Haskell.TH.TypeGraph.Core (unReify, unReifyName)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), runExpanded)
 
 -- | For simple type graphs always set _field and _synonyms to Nothing.
@@ -37,20 +36,8 @@ instance Ppr TypeGraphVertex where
                  _ ->   [ptext " ("] ++
                         intersperse (ptext ", ")
                           (List.concatMap (\ n -> [ptext ("aka " ++ show (unReifyName n))]) (Set.toList ns) ++
-                           maybe [] (\ f -> [ptext (printField f)]) fld) ++
+                           maybe [] (\ f -> [ppr f]) fld) ++
                         [ptext ")"])
-        where
-          printField :: (Name, Name, Either Int Name) -> String
-          printField (tname, cname, field) =
-              "field " ++
-              show (unReifyName tname) ++ "." ++
-              either (\ n -> show (unReifyName cname) ++ "[" ++ show n ++ "]") (\ f -> show (unReifyName f)) field
-
-          unReify :: Data a => a -> a
-          unReify = everywhere (mkT unReifyName)
-
-          unReifyName :: Name -> Name
-          unReifyName = mkName . nameBase
 
 $(makeLenses ''TypeGraphVertex)
 
