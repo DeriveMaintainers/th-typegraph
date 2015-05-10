@@ -78,8 +78,12 @@ fieldVertices v =
 -- fields of a record.
 typeGraphEdges :: forall m. MonadReader TypeGraphInfo m => m TypeGraphEdges
 typeGraphEdges = do
-  findEdges >>= execStateT (view hints >>= mapM (uncurry doHint) . concat . List.map (\ (a, bs) -> List.map (a,) bs) . Map.toList)
+  findEdges >>= execStateT (view hints >>= mapM doHint')
     where
+      doHint' :: (TypeGraphVertex, VertexHint) -> StateT TypeGraphEdges m ()
+      doHint' (v, h) = do
+        doHint v h
+
       doHint :: TypeGraphVertex -> VertexHint -> StateT TypeGraphEdges m ()
       doHint v Sink = fieldVertices v >>= mapM_ (modify . Map.alter (\_ -> Just Set.empty)) . Set.toList
       doHint _ Normal = return ()

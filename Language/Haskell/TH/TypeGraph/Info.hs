@@ -25,6 +25,7 @@ import Control.Monad.Reader (ReaderT, runReaderT)
 import Control.Monad.State (execStateT, StateT)
 import Data.List as List (intercalate, map)
 import Data.Map as Map (insert, insertWith, Map, toList)
+import Data.Maybe (mapMaybe)
 import Data.Set as Set (insert, member, Set, singleton, toList, union)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
@@ -51,21 +52,15 @@ data TypeGraphInfo
       , _synonyms :: Map (E Type) (Set Name)
       -- Map from field type to field names
       , _fields :: Map (E Type) (Set (Name, Name, Either Int Name))
-{-
-      -- Map from type name to the field names that type contains
-      , _decfields :: Map Name (Set (Name, Name, Either Int Name))
-      -- Information about record fields which contain a given type
-      , _edges :: GraphEdges TypeGraphVertex
--}
-      -- The edges of the "has this subtype" graph.  A type has
-      -- subtypes via either type application ('AppT'), field type
-      -- ('StrictType', 'VarStrictType') or the 'VertexHint'
-      -- mechanism.
-      , _hints :: Map TypeGraphVertex [VertexHint]
+      -- Hints that modify the shape of the type graph. The key is the
+      -- raw type and field values that are later used to construct
+      -- the TypeGraphVertex, it is unsafe to do that until
+      -- TypeGraphInfo is finalized.
+      , _hints :: [(TypeGraphVertex, VertexHint)]
       } deriving (Show, Eq, Ord)
 
 instance Ppr TypeGraphInfo where
-    ppr (TypeGraphInfo {_typeSet = t, _infoMap = i, _expanded = e, _synonyms = s, _fields = f, _hints = h}) =
+    ppr (TypeGraphInfo {_typeSet = t, _infoMap = i, _expanded = e, _synonyms = s, _fields = f, _hints = hs}) =
         ptext $ intercalate "\n  " ["TypeGraphInfo:", ppt, ppi, ppe, pps, ppf, pph] ++ "\n"
         where
           ppt = intercalate "\n    " ("typeSet:" : concatMap (lines . pprint) (Set.toList t))
@@ -73,18 +68,19 @@ instance Ppr TypeGraphInfo where
           ppe = intercalate "\n    " ("expanded:" : concatMap (lines . (\ (typ, (E etyp)) -> pprint typ ++ " -> " ++ pprint etyp)) (Map.toList e))
           pps = intercalate "\n    " ("synonyms:" : concatMap (lines . (\ (E etyp, ns) -> pprint etyp ++ " -> " ++ show ns)) (Map.toList s))
           ppf = intercalate "\n    " ("fields:" : concatMap (lines . (\ (E etyp, fs) -> pprint etyp ++ " -> " ++ show fs)) (Map.toList f))
-          pph = intercalate "\n    " ("hints:" : concatMap (lines . (\ (v, hs) -> pprint v ++ " -> " ++ intercalate " " (map pprint hs))) (Map.toList h))
+          pph = intercalate "\n    " ("hints:" : concatMap (lines . (\ (v, h) -> pprint v ++ " -> " ++ pprint h)) hs)
 
 $(makeLenses ''TypeGraphInfo)
 
 instance Lift TypeGraphInfo where
     lift (TypeGraphInfo {_typeSet = t, _infoMap = i, _expanded = e, _synonyms = s, _fields = f, _hints = h}) =
-        [| TypeGraphInfo {_typeSet = $(lift t),
-                          _infoMap = $(lift i),
-                          _expanded = $(lift e),
-                          _synonyms = $(lift s),
-                          _fields = $(lift f),
-                          _hints = $(lift h)} |]
+        [| TypeGraphInfo { _typeSet = $(lift t)
+                         , _infoMap = $(lift i)
+                         , _expanded = $(lift e)
+                         , _synonyms = $(lift s)
+                         , _fields = $(lift f)
+                         , _hints = $(lift h)
+                         } |]
 
 emptyTypeGraphInfo :: TypeGraphInfo
 emptyTypeGraphInfo = TypeGraphInfo {_typeSet = mempty, _infoMap = mempty, _expanded = mempty, _synonyms = mempty, _fields = mempty, _hints = mempty}
@@ -92,9 +88,10 @@ emptyTypeGraphInfo = TypeGraphInfo {_typeSet = mempty, _infoMap = mempty, _expan
 withTypeGraphInfo :: forall m a. DsMonad m => [(TypeGraphVertex, VertexHint)] -> [Type] -> ReaderT TypeGraphInfo m a -> m a
 withTypeGraphInfo hintList types action = typeGraphInfo hintList types >>= runReaderT action
 
--- | Collect the graph information for one type.
-typeGraphInfo' :: forall m. DsMonad m => Type -> StateT TypeGraphInfo m ()
-typeGraphInfo' typ0 = do
+-- | Collect the graph information for one type and all the types
+-- reachable from it.
+collectTypeInfo :: forall m. DsMonad m => Type -> StateT TypeGraphInfo m ()
+collectTypeInfo typ0 = do
   doType typ0
     where
       doType typ = do
@@ -147,13 +144,11 @@ typeGraphInfo' typ0 = do
 
 -- | Add a hint to the TypeGraphInfo state and process any type it
 -- might contain.
-typeGraphHint :: DsMonad m => TypeGraphVertex -> VertexHint -> StateT TypeGraphInfo m ()
-typeGraphHint v h = do
-  maybe (return ()) typeGraphInfo' (hintType h)
-  hints %= Map.insertWith (++) v [h]
+collectHintInfo :: DsMonad m => TypeGraphVertex -> VertexHint -> StateT TypeGraphInfo m ()
+collectHintInfo v h = hints %= (++ [(v, h)]) -- ((v, h) :)
 
 -- | Build a TypeGraphInfo value by scanning the supplied types and hints.
 typeGraphInfo :: forall m. DsMonad m => [(TypeGraphVertex, VertexHint)] -> [Type] -> m TypeGraphInfo
 typeGraphInfo hintList types = flip execStateT emptyTypeGraphInfo $ do
-  mapM_ typeGraphInfo' types
-  mapM_ (uncurry typeGraphHint) hintList
+  mapM_ collectTypeInfo (types ++ mapMaybe (hintType . view _2) hintList)
+  mapM_ (uncurry collectHintInfo) hintList
