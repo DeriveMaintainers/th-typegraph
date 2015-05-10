@@ -4,19 +4,22 @@ module Language.Haskell.TH.TypeGraph.Vertex
     ( TypeGraphVertex(..)
     , field, syns, etype
     , typeNames
+    , typeVertex -- old
+    , fieldVertex -- old
     ) where
 
 import Control.Lens -- (makeLenses, view)
 import Data.Generics (Data, everywhere, mkT)
 import Data.List as List (concatMap, intersperse)
-import Data.Set as Set (insert, Set, toList)
+import Data.Set as Set (empty, insert, Set, toList)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
-import Language.Haskell.TH.TypeGraph.Core ()
-import Language.Haskell.TH.TypeGraph.Expand (E(E), runExpanded)
+import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (hcat, ptext)
 import Language.Haskell.TH.Syntax (Lift(lift))
+import Language.Haskell.TH.TypeGraph.Core ()
+import Language.Haskell.TH.TypeGraph.Expand (E(E), runExpanded)
 
 -- | For simple type graphs always set _field and _synonyms to Nothing.
 data TypeGraphVertex
@@ -61,3 +64,8 @@ typeNames (TypeGraphVertex {_syns = s}) = s
 instance Lift TypeGraphVertex where
     lift (TypeGraphVertex {_field = f, _syns = ns, _etype = t}) =
         [|TypeGraphVertex {_field = $(lift f), _syns = $(lift ns), _etype = $(lift t)}|]
+
+typeVertex :: DsMonad m => Type -> m TypeGraphVertex
+typeVertex typ = return $ TypeGraphVertex {_etype = E typ, _field = Nothing, _syns = Set.empty}
+fieldVertex :: DsMonad m => Type -> (Name, Name, Either Int Name) -> m TypeGraphVertex
+fieldVertex typ fld = return $ TypeGraphVertex {_etype = E typ, _field = Just fld, _syns = Set.empty}
