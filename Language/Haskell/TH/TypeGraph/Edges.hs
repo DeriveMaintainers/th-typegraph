@@ -16,11 +16,11 @@ import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext)
 
-type TypeGraphEdges = GraphEdges TypeGraphVertex
+type TypeGraphEdges label = GraphEdges label TypeGraphVertex
 
-instance Ppr TypeGraphEdges where
+instance Ppr (TypeGraphEdges label) where
     ppr x =
         ptext $ intercalate "\n  " $
           "edges:" : (List.map
-                       (\ (k, ks) -> intercalate "\n    " ((pprint' k ++ "->") : List.map pprint' (Set.toList ks)))
+                       (\ (k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ "->") : List.map pprint' (Set.toList ks)))
                        (Map.toList x))

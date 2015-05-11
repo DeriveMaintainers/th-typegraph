@@ -11,7 +11,7 @@ import Language.Haskell.TH
 import Language.Haskell.TH.TypeGraph.Core (typeArity)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType, markExpanded)
 import Language.Haskell.TH.TypeGraph.Hints (VertexHint(Normal))
-import Language.Haskell.TH.TypeGraph.Monad (typeGraphVertices, typeGraphEdges)
+import Language.Haskell.TH.TypeGraph.Monad (typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
 import Language.Haskell.TH.Desugar (withLocalDeclarations)
 import Language.Haskell.TH.Instances ()
@@ -163,7 +163,8 @@ typeGraphInfoOfType =
       "    Language.Haskell.TH.Syntax.PkgName -> fromList [(Language.Haskell.TH.Syntax.NameFlavour,Language.Haskell.TH.Syntax.NameG,Left 2)]",
       "    Language.Haskell.TH.Syntax.TyLit -> fromList [(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.LitT,Left 1)]",
       "    Language.Haskell.TH.Syntax.Type -> fromList [(Language.Haskell.TH.Syntax.TyVarBndr,Language.Haskell.TH.Syntax.KindedTV,Left 2),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.AppT,Left 1),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.AppT,Left 2),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.ForallT,Left 3),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.SigT,Left 1),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.SigT,Left 2)]",
-      "  hints:" ]
+      "  hints:",
+      "  labels:" ]
 #else
     [ "TypeGraphInfo:",
       "  typeSet:",
@@ -304,7 +305,8 @@ typeGraphInfoOfType =
       "    Language.Haskell.TH.Syntax.PkgName -> fromList [(Language.Haskell.TH.Syntax.NameFlavour,Language.Haskell.TH.Syntax.NameG,Left 2)]",
       "    Language.Haskell.TH.Syntax.TyLit -> fromList [(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.LitT,Left 1)]",
       "    Language.Haskell.TH.Syntax.Type -> fromList [(Language.Haskell.TH.Syntax.Pred,Language.Haskell.TH.Syntax.EqualP,Left 1),(Language.Haskell.TH.Syntax.Pred,Language.Haskell.TH.Syntax.EqualP,Left 2),(Language.Haskell.TH.Syntax.TyVarBndr,Language.Haskell.TH.Syntax.KindedTV,Left 2),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.AppT,Left 1),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.AppT,Left 2),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.ForallT,Left 3),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.SigT,Left 1),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.SigT,Left 2)]",
-      "  hints:" ]
+      "  hints:",
+      "  labels:" ]
 #endif
 
 subtypesOfType :: Set String
@@ -1072,27 +1074,27 @@ arrayInstances =
   Set.fromList
     ["instance IArray UArray (FunPtr a)","instance IArray UArray (Ptr a)","instance IArray UArray (StablePtr a)","instance IArray UArray Bool","instance IArray UArray Char","instance IArray UArray Double","instance IArray UArray Float","instance IArray UArray Int","instance IArray UArray Int16","instance IArray UArray Int32","instance IArray UArray Int64","instance IArray UArray Int8","instance IArray UArray Word","instance IArray UArray Word16","instance IArray UArray Word32","instance IArray UArray Word64","instance IArray UArray Word8"]
 
-decTypeSynonyms :: Map (E Type) (Set Name)
+decTypeSynonyms :: Map (E Type) ((), Set Name)
 decTypeSynonyms =
   Map.fromList
     [
 #if MIN_VERSION_template_haskell(2,10,0)
-     (E (AppT (AppT (AppT (TupleT 3) (ConT ''Name)) (ConT ''Strict)) (ConT ''Type)), Set.fromList [''VarStrictType]),
-     (E (AppT (AppT (TupleT 2) (ConT ''Name)) (ConT ''Exp)),                         Set.fromList [''FieldExp]),
-     (E (AppT (AppT (TupleT 2) (ConT ''Name)) (ConT ''Pat)),                         Set.fromList [''FieldPat]),
-     (E (AppT (AppT (TupleT 2) (ConT ''Strict)) (ConT ''Type)),                      Set.fromList [''StrictType]),
-     (E (AppT (ConT ''Ratio) (ConT ''Integer)),                                      Set.fromList [''Rational]),
-     (E (AppT ListT (ConT ''Char)),                                                  Set.fromList [''String]),
-     (E (AppT ListT (ConT ''Type)),                                                  Set.fromList [''Cxt]),
-     (E (ConT ''Type),                                                               Set.fromList [''Kind,''Pred])
+     (E (AppT (AppT (AppT (TupleT 3) (ConT ''Name)) (ConT ''Strict)) (ConT ''Type)), ((), Set.fromList [''VarStrictType])),
+     (E (AppT (AppT (TupleT 2) (ConT ''Name)) (ConT ''Exp)),                         ((), Set.fromList [''FieldExp])),
+     (E (AppT (AppT (TupleT 2) (ConT ''Name)) (ConT ''Pat)),                         ((), Set.fromList [''FieldPat])),
+     (E (AppT (AppT (TupleT 2) (ConT ''Strict)) (ConT ''Type)),                      ((), Set.fromList [''StrictType])),
+     (E (AppT (ConT ''Ratio) (ConT ''Integer)),                                      ((), Set.fromList [''Rational])),
+     (E (AppT ListT (ConT ''Char)),                                                  ((), Set.fromList [''String])),
+     (E (AppT ListT (ConT ''Type)),                                                  ((), Set.fromList [''Cxt])),
+     (E (ConT ''Type),                                                               ((), Set.fromList [''Kind,''Pred]))
 #else
-     (E (AppT (AppT (AppT (TupleT 3) (ConT ''Name)) (ConT ''Strict)) (ConT ''Type)), Set.fromList [''VarStrictType]),
-     (E (AppT (AppT (TupleT 2) (ConT ''Name)) (ConT ''Exp)),                         Set.fromList [''FieldExp]),
-     (E (AppT (AppT (TupleT 2) (ConT ''Name)) (ConT ''Pat)),                         Set.fromList [''FieldPat]),
-     (E (AppT (AppT (TupleT 2) (ConT ''Strict)) (ConT ''Type)),                      Set.fromList [''StrictType]),
-     (E (AppT (ConT ''Ratio) (ConT ''Integer)),                                      Set.fromList [''Rational]),
-     (E (AppT ListT (ConT ''Char)),                                                  Set.fromList [''String]),
-     (E (AppT ListT (ConT ''Pred)),                                                  Set.fromList [''Cxt]),
-     (E (ConT ''Type),                                                               Set.fromList [''Kind])
+     (E (AppT (AppT (AppT (TupleT 3) (ConT ''Name)) (ConT ''Strict)) (ConT ''Type)), ((), Set.fromList [''VarStrictType])),
+     (E (AppT (AppT (TupleT 2) (ConT ''Name)) (ConT ''Exp)),                         ((), Set.fromList [''FieldExp])),
+     (E (AppT (AppT (TupleT 2) (ConT ''Name)) (ConT ''Pat)),                         ((), Set.fromList [''FieldPat])),
+     (E (AppT (AppT (TupleT 2) (ConT ''Strict)) (ConT ''Type)),                      ((), Set.fromList [''StrictType])),
+     (E (AppT (ConT ''Ratio) (ConT ''Integer)),                                      ((), Set.fromList [''Rational])),
+     (E (AppT ListT (ConT ''Char)),                                                  ((), Set.fromList [''String])),
+     (E (AppT ListT (ConT ''Pred)),                                                  ((), Set.fromList [''Cxt])),
+     (E (ConT ''Type),                                                               ((), Set.fromList [''Kind]))
 #endif
     ]

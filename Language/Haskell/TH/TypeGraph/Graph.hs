@@ -17,44 +17,45 @@ module Language.Haskell.TH.TypeGraph.Graph
     , graphFromMap
     ) where
 
+import Control.Lens (over, _2)
 import Control.Monad (filterM)
 import Data.Graph hiding (edges)
 import Data.List as List
 import Data.Map as Map
 import Data.Set as Set
 
-type GraphEdges v = Map v (Set v)
+type GraphEdges label key = Map key (label, Set key)
 
 -- | Remove a node and all its in- and out-edges.
-cutVertex :: (Eq a, Ord a) => a -> GraphEdges a -> GraphEdges a
-cutVertex victim edges = Map.map (Set.filter (/= victim)) $ Map.filterWithKey (\k _ -> k /= victim) edges
+cutVertex :: (Eq a, Ord a) => a -> GraphEdges label a -> GraphEdges label a
+cutVertex victim edges = Map.map (over _2 (Set.filter (/= victim))) $ Map.filterWithKey (\k _ -> k /= victim) edges
 
 -- | Cut vertices for which the predicate returns False
-cutVertices :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges a -> GraphEdges a
+cutVertices :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges label a -> GraphEdges label a
 cutVertices victim edges = List.foldr cutVertex edges (List.filter victim (Map.keys edges))
 
 -- | Cut vertices for which the predicate returns False
-cutVerticesM :: (Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges a -> m (GraphEdges a)
+cutVerticesM :: (Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges label a -> m (GraphEdges label a)
 cutVerticesM victim edges = do
   victims <- filterM victim (Map.keys edges) >>= return . Set.fromList
   return $ cutVertices (`Set.member` victims) edges
 
 -- | Merge a node into the nodes that are its in-edges.
-mergeVertex :: (Eq a, Ord a) => a -> GraphEdges a -> GraphEdges a
+mergeVertex :: (Eq a, Ord a) => a -> GraphEdges label a -> GraphEdges label a
 mergeVertex victim edges =
   survivorEdges'
     where
       -- Wherever the victim vertex appears as an out-edge, substitute the victimOut set
-      survivorEdges' = Map.mapWithKey (\ k s -> if Set.member victim s then Set.union (Set.delete victim s) (Set.delete k victimOut) else s) survivorEdges
+      survivorEdges' = Map.mapWithKey (\ k (node, s) -> (node, if Set.member victim s then Set.union (Set.delete victim s) (Set.delete k victimOut) else s)) survivorEdges
       -- Split map into victim vertex and other vertices
       (victimEdges, survivorEdges) = partitionWithKey (\ v _ -> (v == victim)) edges
       -- Get the out-edges of the victim vertex
-      victimOut = Set.delete victim $ Set.unions $ Map.elems victimEdges
+      victimOut = Set.delete victim $ Set.unions $ List.map snd $ Map.elems victimEdges
 
-mergeVertices :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges a -> GraphEdges a
+mergeVertices :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges label a -> GraphEdges label a
 mergeVertices keep edges = List.foldr mergeVertex edges (List.filter (not . keep) (Map.keys edges))
 
-mergeVerticesM :: (Monad m, Ord  a) => (a -> m Bool) -> GraphEdges a -> m (GraphEdges a)
+mergeVerticesM :: (Monad m, Ord  a) => (a -> m Bool) -> GraphEdges label a -> m (GraphEdges label a)
 mergeVerticesM predicateM edges =
     mapM predicateM (Map.keys edges) >>= \flags -> return $ mergeVertices (makePredicate (zip (Map.keys edges) flags)) edges
     where
@@ -79,10 +80,10 @@ flatten = Set.fold Set.union Set.empty
 -- from a type to one of the types it contains.  Thus, each edge
 -- represents a primitive lens, and each path in the graph is a
 -- composition of lenses.
-graphFromMap :: forall node key a. (Ord a, node ~ a, key ~ a) =>
-                GraphEdges a -> (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex)
+graphFromMap :: forall label key. (Ord key) =>
+                GraphEdges label key -> (Graph, Vertex -> (label, key, [key]), key -> Maybe Vertex)
 graphFromMap mp =
     graphFromEdges triples
     where
-      triples :: [(node, key, [key])]
-      triples = List.map (\ (k, ks) -> (k, k, Set.toList ks)) $ Map.toList mp
+      triples :: [(label, key, [key])]
+      triples = List.map (\ (k, (node, ks)) -> (node, k, Set.toList ks)) $ Map.toList mp

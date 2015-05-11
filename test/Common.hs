@@ -1,15 +1,20 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, ScopedTypeVariables, TemplateHaskell #-}
 module Common where
 
+import Control.Monad.Reader (MonadReader)
 import Data.List as List (intercalate, map)
 import Data.Map as Map (Map, fromList, toList)
 import Data.Monoid ((<>))
 import Data.Set as Set (Set, difference, empty, fromList, null, toList)
 import Data.Generics (Data, everywhere, mkT)
 import Language.Haskell.TH
-import Language.Haskell.TH.TypeGraph.Core (pprint')
+import Language.Haskell.TH.Desugar (DsMonad)
+import Language.Haskell.TH.TypeGraph.Core (Field, pprint')
 import Language.Haskell.TH.TypeGraph.Expand (E, markExpanded, runExpanded)
 import Language.Haskell.TH.TypeGraph.Edges (TypeGraphEdges)
+import Language.Haskell.TH.TypeGraph.Hints (VertexHint)
+import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, typeGraphInfo)
+import Language.Haskell.TH.TypeGraph.Monad (typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
 
 import Language.Haskell.TH.Syntax (Lift(lift))
@@ -44,5 +49,11 @@ pprintVertex = pprint'
 pprintPred :: E Pred -> String
 pprintPred = pprint' . unReify . runExpanded
 
-edgesToStrings :: TypeGraphEdges -> [(String, [String])]
-edgesToStrings mp = List.map (\ (t, ts) -> (pprintVertex t, map pprintVertex (Set.toList ts))) (Map.toList mp)
+edgesToStrings :: TypeGraphEdges label -> [(String, [String])]
+edgesToStrings mp = List.map (\ (t, (_, s)) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
+
+typeGraphInfo' :: [(Maybe Field, Type, VertexHint)] -> [Type] -> Q (TypeGraphInfo ())
+typeGraphInfo' = typeGraphInfo
+
+typeGraphEdges' :: forall m. (DsMonad m, MonadReader (TypeGraphInfo ()) m) => m (TypeGraphEdges ())
+typeGraphEdges' = typeGraphEdges

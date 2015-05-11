@@ -55,6 +55,9 @@ instance Ppr Field where
         show (unReifyName tname) ++ "." ++
         either (\ n -> show (unReifyName cname) ++ "[" ++ show n ++ "]") (\ f -> show (unReifyName f)) field
 
+instance Ppr () where
+    ppr () = ptext "()"
+
 unReify :: Data a => a -> a
 unReify = everywhere (mkT unReifyName)
 
