@@ -23,40 +23,36 @@ import Language.Haskell.TH.Syntax (Lift(lift))
 
 -- | When a VertexHint value is associated with a Type it describes
 -- alterations in the type graph from the usual default.
-data VertexHint a
+data VertexHint
     = Normal      -- ^ normal case
     | Hidden      -- ^ don't create this vertex, no in or out edges
     | Sink        -- ^ out degree zero - don't create any out edges
     | Divert Type -- ^ replace all out edges with an edge to an alternate type
     | Extra Type  -- ^ add an extra out edge to the given type
-    | Custom a    -- ^ A hint that will be interpreted by the client
     deriving (Eq, Ord, Show)
 
-instance Default (VertexHint a) where
+instance Default VertexHint where
     def = Normal
 
-instance Lift a => Lift (VertexHint a) where
+instance Lift VertexHint where
     lift Normal = [|Normal|]
     lift Hidden = [|Hidden|]
     lift Sink = [|Sink|]
     lift (Divert x) = [|Divert $(lift x)|]
     lift (Extra x) = [|Extra $(lift x)|]
-    lift (Custom x) = [|Custom $(lift x)|]
 
-instance Ppr a => Ppr (VertexHint a) where
+instance Ppr VertexHint where
     ppr Normal = ptext "Normal"
     ppr Hidden = ptext "Hidden"
     ppr Sink = ptext "Sink"
     ppr (Divert x) = hcat [ptext "Divert (", ppr x, ptext ")"]
     ppr (Extra x) = hcat [ptext "Extra (", ppr x, ptext ")"]
-    ppr (Custom x) = hcat [ptext "Custom (", ppr x, ptext ")"]
 
 -- | Class for finding embedded Type values
 class HasTypes a where
     hasTypes :: a -> [Type]
 
-instance HasTypes a => HasTypes (VertexHint a) where
+instance HasTypes VertexHint where
     hasTypes (Divert x) = [x]
     hasTypes (Extra x) = [x]
-    hasTypes (Custom x) = hasTypes x
     hasTypes _ = []

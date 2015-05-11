@@ -55,12 +55,12 @@ pprintPred = pprint' . unReify . runExpanded
 edgesToStrings :: GraphEdges label TypeGraphVertex -> [(String, [String])]
 edgesToStrings mp = List.map (\ (t, (_, s)) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
 
-typeGraphInfo' :: [(Maybe Field, Type, VertexHint ())] -> [Type] -> Q (TypeGraphInfo ())
+typeGraphInfo' :: [(Maybe Field, Type, VertexHint)] -> [Type] -> Q (TypeGraphInfo VertexHint)
 typeGraphInfo' = typeGraphInfo
 
-typeGraphEdges' :: forall m. (DsMonad m, MonadReader (TypeGraphInfo ()) m) => m (GraphEdges () TypeGraphVertex)
+typeGraphEdges' :: forall m. (DsMonad m, MonadReader (TypeGraphInfo VertexHint) m) => m (GraphEdges VertexHint TypeGraphVertex)
 typeGraphEdges' = typeGraphEdges
 
 withTypeGraphInfo' :: forall m a. DsMonad m =>
-                      [(Maybe Field, Type, VertexHint ())] -> [Type] -> ReaderT (TypeGraphInfo ()) m a -> m a
+                      [(Maybe Field, Type, VertexHint)] -> [Type] -> ReaderT (TypeGraphInfo VertexHint) m a -> m a
 withTypeGraphInfo' = withTypeGraphInfo

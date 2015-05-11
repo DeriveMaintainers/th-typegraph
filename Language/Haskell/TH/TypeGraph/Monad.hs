@@ -82,11 +82,11 @@ fieldVertices v =
 -- information from the vertex hints.  This means splitting the nodes
 -- according to record fields, because hints can refer to particular
 -- fields of a record.
-typeGraphEdges :: forall label m. (Default label, DsMonad m, MonadReader (TypeGraphInfo label) m) => m (GraphEdges label TypeGraphVertex)
+typeGraphEdges :: forall m. (DsMonad m, MonadReader (TypeGraphInfo VertexHint) m) => m (GraphEdges VertexHint TypeGraphVertex)
 typeGraphEdges = do
   findEdges >>= execStateT (view hints >>= mapM doHint)
     where
-      doHint :: (Maybe Field, Type, VertexHint label) -> StateT (GraphEdges label TypeGraphVertex) m ()
+      doHint :: (Maybe Field, Type, VertexHint) -> StateT (GraphEdges VertexHint TypeGraphVertex) m ()
       doHint (fld, typ, Sink) = do
         v <- vertex fld typ
         fieldVertices v >>= mapM_ (modify . Map.alter (alterFn (const Set.empty))) . Set.toList
@@ -106,7 +106,7 @@ typeGraphEdges = do
         fieldVertices v >>= mapM_ (modify . Map.alter (alterFn (Set.insert v'))) . Set.toList
       -- doHint (fld, typ, Custom label) =
 
-      alterFn :: (Set TypeGraphVertex -> Set TypeGraphVertex) -> Maybe (label, Set TypeGraphVertex) -> Maybe (label, Set TypeGraphVertex)
+      alterFn :: (Set TypeGraphVertex -> Set TypeGraphVertex) -> Maybe (VertexHint, Set TypeGraphVertex) -> Maybe (VertexHint, Set TypeGraphVertex)
       alterFn setf (Just (node, s)) = Just (node, setf s)
       alterFn setf Nothing | Set.null (setf Set.empty) = Nothing
       alterFn setf Nothing = Just (def, setf Set.empty)
@@ -186,25 +186,25 @@ findEdges = do
 -- | Return the set of types embedded in the given type.  This is just
 -- the nodes of the type graph.  The type synonymes are expanded by the
 -- th-desugar package to make them suitable for use as map keys.
-typeGraphVertices :: forall label m. (Default label, DsMonad m, MonadReader (TypeGraphInfo label) m) => m (Set TypeGraphVertex)
+typeGraphVertices :: forall m. (DsMonad m, MonadReader (TypeGraphInfo VertexHint) m) => m (Set TypeGraphVertex)
 typeGraphVertices = do
-  (edges :: GraphEdges label TypeGraphVertex) <- typeGraphEdges
+  (edges :: GraphEdges VertexHint TypeGraphVertex) <- typeGraphEdges
   return $ Set.fromList $ Map.keys edges
 
 -- | Build a graph from the result of typeGraphEdges, each edge goes
 -- from a type to one of the types it contains.  Thus, each edge
 -- represents a primitive lens, and each path in the graph is a
 -- composition of lenses.
-typeGraph :: forall m label key. (Default label, DsMonad m, MonadReader (TypeGraphInfo label) m, key ~ TypeGraphVertex) =>
-                m (Graph, Vertex -> (label, key, [key]), key -> Maybe Vertex)
+typeGraph :: forall m key. (DsMonad m, MonadReader (TypeGraphInfo VertexHint) m, key ~ TypeGraphVertex) =>
+                m (Graph, Vertex -> (VertexHint, key, [key]), key -> Maybe Vertex)
 typeGraph = do
-  (edges :: GraphEdges label TypeGraphVertex) <- typeGraphEdges
+  (edges :: GraphEdges VertexHint TypeGraphVertex) <- typeGraphEdges
   return $ graphFromMap edges
 
 -- | Simplify a graph by throwing away the field information in each
 -- node.  This means the nodes only contain the fully expanded Type
 -- value (and any type synonyms.)
-simpleEdges :: GraphEdges label TypeGraphVertex -> GraphEdges label TypeGraphVertex
+simpleEdges :: GraphEdges VertexHint TypeGraphVertex -> GraphEdges VertexHint TypeGraphVertex
 simpleEdges = Map.mapWithKey (\v (n, s) -> (n, Set.delete v s)) .    -- delete any self edges
               Map.mapKeys simpleVertex .               -- simplify each vertex
               Map.map (over _2 (Set.map simpleVertex)) -- simplify the out edges
@@ -213,14 +213,14 @@ simpleVertex :: TypeGraphVertex -> TypeGraphVertex
 simpleVertex v = v {_field = Nothing}
 
 -- | Find all the reachable type synonyms and return then in a Map.
-typeSynonymMap :: forall label m. (Default label, DsMonad m, MonadReader (TypeGraphInfo label) m) => m (Map TypeGraphVertex (Set Name))
+typeSynonymMap :: forall m. (DsMonad m, MonadReader (TypeGraphInfo VertexHint) m) => m (Map TypeGraphVertex (Set Name))
 typeSynonymMap =
      (Map.filter (not . Set.null) .
       Map.fromList .
       List.map (\node -> (node, _syns node)) .
       Map.keys) <$> typeGraphEdges
 
-typeSynonymMapSimple :: forall label m. (Default label, DsMonad m, MonadReader (TypeGraphInfo label) m) => m (Map (E Type) (Set Name))
+typeSynonymMapSimple :: forall m. (DsMonad m, MonadReader (TypeGraphInfo VertexHint) m) => m (Map (E Type) (Set Name))
 typeSynonymMapSimple =
     simplify <$> typeSynonymMap
     where
