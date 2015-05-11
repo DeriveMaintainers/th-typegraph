@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, ScopedTypeVariables, TemplateHaskell #-}
 module Common where
 
-import Control.Monad.Reader (MonadReader)
+import Control.Monad.Reader (MonadReader, ReaderT)
 import Data.List as List (intercalate, map)
 import Data.Map as Map (Map, fromList, toList)
 import Data.Monoid ((<>))
@@ -12,14 +12,17 @@ import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.TypeGraph.Core (Field, pprint')
 import Language.Haskell.TH.TypeGraph.Expand (E, markExpanded, runExpanded)
 import Language.Haskell.TH.TypeGraph.Graph (GraphEdges)
-import Language.Haskell.TH.TypeGraph.Hints (VertexHint)
-import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, typeGraphInfo)
+import Language.Haskell.TH.TypeGraph.Hints (VertexHint, HasTypes(hasTypes))
+import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, typeGraphInfo, withTypeGraphInfo)
 import Language.Haskell.TH.TypeGraph.Monad (typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
 
 import Language.Haskell.TH.Syntax (Lift(lift))
 
 data SetDifferences a = SetDifferences {unexpected :: Set a, missing :: Set a} deriving (Eq, Ord, Show)
+
+instance HasTypes () where
+    hasTypes () = []
 
 setDifferences :: Ord a => Set a -> Set a -> SetDifferences a
 setDifferences actual expected = SetDifferences {unexpected = Set.difference actual expected, missing = Set.difference expected actual}
@@ -52,8 +55,12 @@ pprintPred = pprint' . unReify . runExpanded
 edgesToStrings :: GraphEdges label TypeGraphVertex -> [(String, [String])]
 edgesToStrings mp = List.map (\ (t, (_, s)) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
 
-typeGraphInfo' :: [(Maybe Field, Type, VertexHint)] -> [Type] -> Q (TypeGraphInfo ())
+typeGraphInfo' :: [(Maybe Field, Type, VertexHint ())] -> [Type] -> Q (TypeGraphInfo ())
 typeGraphInfo' = typeGraphInfo
 
 typeGraphEdges' :: forall m. (DsMonad m, MonadReader (TypeGraphInfo ()) m) => m (GraphEdges () TypeGraphVertex)
 typeGraphEdges' = typeGraphEdges
+
+withTypeGraphInfo' :: forall m a. DsMonad m =>
+                      [(Maybe Field, Type, VertexHint ())] -> [Type] -> ReaderT (TypeGraphInfo ()) m a -> m a
+withTypeGraphInfo' = withTypeGraphInfo

@@ -32,7 +32,7 @@ tests = do
      $([t|String|] >>= \ string -> typeGraphInfo' [] [string] >>= lift . view synonyms) `shouldBe` (Map.fromList [(E (AppT ListT (ConT ''Char)), Set.singleton ''String)])
 
   it "records a type synonym 2" $ do
-     $([t|String|] >>= \ string -> withTypeGraphInfo [] [string] (view expanded >>= \em -> typeVertex (em ! string)) >>= lift) `shouldBe` (TypeGraphVertex Nothing (singleton ''String) (E (AppT ListT (ConT ''Char))))
+     $([t|String|] >>= \ string -> withTypeGraphInfo' [] [string] (view expanded >>= \em -> typeVertex (em ! string)) >>= lift) `shouldBe` (TypeGraphVertex Nothing (singleton ''String) (E (AppT ListT (ConT ''Char))))
 
   it "can build the TypeInfoGraph for Type" $ do
     $(runQ [t|Type|] >>= \typ -> typeGraphInfo' [] [typ] >>= lift . pprint) `shouldBe` typeGraphInfoOfType

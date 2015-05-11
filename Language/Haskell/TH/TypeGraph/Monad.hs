@@ -86,7 +86,7 @@ typeGraphEdges :: forall label m. (Default label, DsMonad m, MonadReader (TypeGr
 typeGraphEdges = do
   findEdges >>= execStateT (view hints >>= mapM doHint)
     where
-      doHint :: (Maybe Field, Type, VertexHint) -> StateT (GraphEdges label TypeGraphVertex) m ()
+      doHint :: (Maybe Field, Type, VertexHint label) -> StateT (GraphEdges label TypeGraphVertex) m ()
       doHint (fld, typ, Sink) = do
         v <- vertex fld typ
         fieldVertices v >>= mapM_ (modify . Map.alter (alterFn (const Set.empty))) . Set.toList
@@ -104,6 +104,7 @@ typeGraphEdges = do
         v <- vertex fld typ
         v' <- typeVertex (em ! typ')
         fieldVertices v >>= mapM_ (modify . Map.alter (alterFn (Set.insert v'))) . Set.toList
+      -- doHint (fld, typ, Custom label) =
 
       alterFn :: (Set TypeGraphVertex -> Set TypeGraphVertex) -> Maybe (label, Set TypeGraphVertex) -> Maybe (label, Set TypeGraphVertex)
       alterFn setf (Just (node, s)) = Just (node, setf s)
