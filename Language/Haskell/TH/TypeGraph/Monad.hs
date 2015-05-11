@@ -42,7 +42,6 @@ import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.TypeGraph.Core (Field)
 import Language.Haskell.TH.TypeGraph.Expand (E(E))
 import Language.Haskell.TH.TypeGraph.Graph (cutVertex, GraphEdges, graphFromMap)
-import Language.Haskell.TH.TypeGraph.Edges (TypeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Hints (VertexHint(..))
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, expanded, fields, hints, infoMap, synonyms, typeSet)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field)
@@ -83,7 +82,7 @@ fieldVertices v =
 -- information from the vertex hints.  This means splitting the nodes
 -- according to record fields, because hints can refer to particular
 -- fields of a record.
-typeGraphEdges :: forall label m. (Default label, DsMonad m, MonadReader (TypeGraphInfo label) m) => m (TypeGraphEdges label)
+typeGraphEdges :: forall label m. (Default label, DsMonad m, MonadReader (TypeGraphInfo label) m) => m (GraphEdges label TypeGraphVertex)
 typeGraphEdges = do
   findEdges >>= execStateT (view hints >>= mapM doHint)
     where
@@ -174,11 +173,11 @@ findEdges = do
         -- Here's where we don't recurse, see?
         -- doVertex v2
 
-      node :: TypeGraphVertex -> StateT (TypeGraphEdges label) m ()
+      node :: TypeGraphVertex -> StateT (GraphEdges label TypeGraphVertex) m ()
       node v = modify (Map.alter (Just . maybe (def, Set.empty) id) v)
-      edge :: TypeGraphVertex -> TypeGraphVertex -> StateT (TypeGraphEdges label) m ()
+      edge :: TypeGraphVertex -> TypeGraphVertex -> StateT (GraphEdges label TypeGraphVertex) m ()
       edge v1 v2 = modify f >> node v2
-          where f :: TypeGraphEdges label -> TypeGraphEdges label
+          where f :: GraphEdges label TypeGraphVertex -> GraphEdges label TypeGraphVertex
                 f = Map.alter g v1
                 g :: (Maybe (label, Set TypeGraphVertex) -> Maybe (label, Set TypeGraphVertex))
                 g = Just . maybe (def, singleton v2) (over _2 (Set.insert v2))
@@ -188,7 +187,7 @@ findEdges = do
 -- th-desugar package to make them suitable for use as map keys.
 typeGraphVertices :: forall label m. (Default label, DsMonad m, MonadReader (TypeGraphInfo label) m) => m (Set TypeGraphVertex)
 typeGraphVertices = do
-  (edges :: TypeGraphEdges label) <- typeGraphEdges
+  (edges :: GraphEdges label TypeGraphVertex) <- typeGraphEdges
   return $ Set.fromList $ Map.keys edges
 
 -- | Build a graph from the result of typeGraphEdges, each edge goes
@@ -198,13 +197,13 @@ typeGraphVertices = do
 typeGraph :: forall m label key. (Default label, DsMonad m, MonadReader (TypeGraphInfo label) m, key ~ TypeGraphVertex) =>
                 m (Graph, Vertex -> (label, key, [key]), key -> Maybe Vertex)
 typeGraph = do
-  (edges :: TypeGraphEdges label) <- typeGraphEdges
+  (edges :: GraphEdges label TypeGraphVertex) <- typeGraphEdges
   return $ graphFromMap edges
 
 -- | Simplify a graph by throwing away the field information in each
 -- node.  This means the nodes only contain the fully expanded Type
 -- value (and any type synonyms.)
-simpleEdges :: TypeGraphEdges label -> TypeGraphEdges label
+simpleEdges :: GraphEdges label TypeGraphVertex -> GraphEdges label TypeGraphVertex
 simpleEdges = Map.mapWithKey (\v (n, s) -> (n, Set.delete v s)) .    -- delete any self edges
               Map.mapKeys simpleVertex .               -- simplify each vertex
               Map.map (over _2 (Set.map simpleVertex)) -- simplify the out edges

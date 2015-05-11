@@ -1,6 +1,5 @@
 module Language.Haskell.TH.TypeGraph
     ( module Language.Haskell.TH.TypeGraph.Core
-    , module Language.Haskell.TH.TypeGraph.Edges
     , module Language.Haskell.TH.TypeGraph.Expand
     , module Language.Haskell.TH.TypeGraph.Graph
     , module Language.Haskell.TH.TypeGraph.Hints
@@ -11,7 +10,6 @@ module Language.Haskell.TH.TypeGraph
     ) where
 
 import Language.Haskell.TH.TypeGraph.Core (FieldType(FieldType, fPos, fNameAndType), fName, fType, typeArity, pprint')
-import Language.Haskell.TH.TypeGraph.Edges (TypeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Expand (Expanded(markExpanded), runExpanded, E(E))
 import Language.Haskell.TH.TypeGraph.Graph (GraphEdges, graphFromMap,
                                             cutVertex, cutVertices, cutVerticesM, mergeVertex, mergeVertices, mergeVerticesM)

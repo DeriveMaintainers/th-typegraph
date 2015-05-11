@@ -2,6 +2,7 @@
 
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, TypeSynonymInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Language.Haskell.TH.TypeGraph.Graph
@@ -23,8 +24,18 @@ import Data.Graph hiding (edges)
 import Data.List as List
 import Data.Map as Map
 import Data.Set as Set
+import Language.Haskell.TH (Ppr(ppr))
+import Language.Haskell.TH.PprLib (ptext)
+import Language.Haskell.TH.TypeGraph.Core (pprint')
 
 type GraphEdges label key = Map key (label, Set key)
+
+instance Ppr key => Ppr (GraphEdges label key) where
+    ppr x =
+        ptext $ intercalate "\n  " $
+          "edges:" : (List.map
+                       (\ (k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ "->") : List.map pprint' (Set.toList ks)))
+                       (Map.toList x))
 
 -- | Remove a node and all its in- and out-edges.
 cutVertex :: (Eq a, Ord a) => a -> GraphEdges label a -> GraphEdges label a
