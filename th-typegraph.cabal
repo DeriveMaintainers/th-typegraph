@@ -44,7 +44,7 @@ test-suite th-typegraph-tests
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
   main-is:          Tests.hs
-  build-depends:    array, base, bytestring, containers, deepseq, ghc-prim,
+  build-depends:    array, base, bytestring, containers, data-default, deepseq, ghc-prim,
                     hspec, hspec-core, lens, mtl, syb, template-haskell, text,
                     th-typegraph, th-desugar, th-orphans, th-reify-many
   default-language: Haskell2010

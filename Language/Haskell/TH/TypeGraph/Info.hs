@@ -98,8 +98,9 @@ collectTypeInfo typ0 = do
         case Set.member typ s of
           True -> return ()
           False -> do typeSet %= Set.insert typ
-                      etyp <- expandType typ
+                      etyp@(E etyp') <- expandType typ
                       expanded %= Map.insert typ etyp
+                      expanded %= Map.insert etyp' etyp
                       doType' typ
 
       doType' :: Type -> StateT (TypeGraphInfo hint) m ()
@@ -136,8 +137,9 @@ collectTypeInfo typ0 = do
 
       doField :: ((Name, Name, Either Int Name), Type) -> StateT (TypeGraphInfo hint) m ()
       doField (fld, ftyp) = do
-        etyp <- expandType ftyp
+        etyp@(E etyp') <- expandType ftyp
         expanded %= Map.insert ftyp etyp
+        expanded %= Map.insert etyp' etyp
         fields %= Map.insertWith union etyp (singleton fld)
         doType ftyp
 

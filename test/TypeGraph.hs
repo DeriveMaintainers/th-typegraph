@@ -7,14 +7,14 @@ module TypeGraph where
 import Control.Applicative ((<$>))
 import Control.Lens
 import Data.List as List (map)
-import Data.Map as Map ((!), fromList, keys)
+import Data.Map as Map (fromList, keys)
 import Data.Set as Set (fromList, singleton)
 import Language.Haskell.TH
 import Language.Haskell.TH.TypeGraph.Core (typeArity)
 import Language.Haskell.TH.TypeGraph.Expand (runExpanded, E(E))
 import Language.Haskell.TH.TypeGraph.Graph (mergeVerticesM {-filterVerticesM, extendEdges, mapVerticesM-})
 import Language.Haskell.TH.TypeGraph.Info (synonyms, withTypeGraphInfo, expanded)
-import Language.Haskell.TH.TypeGraph.Monad (typeVertex, simpleEdges)
+import Language.Haskell.TH.TypeGraph.Monad (vertex, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
 import Language.Haskell.TH.Desugar (withLocalDeclarations)
 import Language.Haskell.TH.Instances ()
@@ -32,7 +32,7 @@ tests = do
      $([t|String|] >>= \ string -> typeGraphInfo' [] [string] >>= lift . view synonyms) `shouldBe` (Map.fromList [(E (AppT ListT (ConT ''Char)), Set.singleton ''String)])
 
   it "records a type synonym 2" $ do
-     $([t|String|] >>= \ string -> withTypeGraphInfo' [] [string] (view expanded >>= \em -> typeVertex (em ! string)) >>= lift) `shouldBe` (TypeGraphVertex Nothing (singleton ''String) (E (AppT ListT (ConT ''Char))))
+     $([t|String|] >>= \ string -> withTypeGraphInfo' [] [string] (vertex Nothing string) >>= lift) `shouldBe` (TypeGraphVertex Nothing (singleton ''String) (E (AppT ListT (ConT ''Char))))
 
   it "can build the TypeInfoGraph for Type" $ do
     $(runQ [t|Type|] >>= \typ -> typeGraphInfo' [] [typ] >>= lift . pprint) `shouldBe` typeGraphInfoOfType

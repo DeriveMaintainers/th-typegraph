@@ -1,18 +1,20 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, ScopedTypeVariables, TemplateHaskell #-}
 module Common where
 
+import Control.Applicative ((<$>))
 import Control.Monad.Reader (MonadReader, ReaderT)
+import Data.Default (Default)
 import Data.List as List (intercalate, map)
-import Data.Map as Map (Map, fromList, toList)
+import Data.Map as Map (Map, filter, fromList, fromListWith, keys, toList)
 import Data.Monoid ((<>))
-import Data.Set as Set (Set, difference, empty, fromList, null, toList)
+import Data.Set as Set (Set, difference, empty, fromList, null, toList, union)
 import Data.Generics (Data, everywhere, mkT)
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.TypeGraph.Core (Field, pprint')
 import Language.Haskell.TH.TypeGraph.Expand (E, markExpanded, runExpanded)
 import Language.Haskell.TH.TypeGraph.Graph (GraphEdges)
-import Language.Haskell.TH.TypeGraph.Hints (VertexHint)
+import Language.Haskell.TH.TypeGraph.Hints (HasVertexHints, VertexHint)
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, typeGraphInfo, withTypeGraphInfo)
 import Language.Haskell.TH.TypeGraph.Monad (typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
@@ -61,3 +63,22 @@ typeGraphEdges' = typeGraphEdges
 withTypeGraphInfo' :: forall m a. DsMonad m =>
                       [(Maybe Field, Type, VertexHint)] -> [Type] -> ReaderT (TypeGraphInfo VertexHint) m a -> m a
 withTypeGraphInfo' = withTypeGraphInfo
+
+-- | Return a mapping from vertex to all the known type synonyms for
+-- the type in that vertex.
+typeSynonymMap :: forall m hint. (DsMonad m, Default hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
+                  m (Map TypeGraphVertex (Set Name))
+typeSynonymMap =
+     (Map.filter (not . Set.null) .
+      Map.fromList .
+      List.map (\node -> (node, _syns node)) .
+      Map.keys) <$> typeGraphEdges
+
+-- | Like 'typeSynonymMap', but with all field information removed.
+typeSynonymMapSimple :: forall m hint. (DsMonad m, Default hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
+                        m (Map (E Type) (Set Name))
+typeSynonymMapSimple =
+    simplify <$> typeSynonymMap
+    where
+      simplify :: Map TypeGraphVertex (Set Name) -> Map (E Type) (Set Name)
+      simplify mp = Map.fromListWith Set.union (List.map (\ (k, a) -> (_etype k, a)) (Map.toList mp))
