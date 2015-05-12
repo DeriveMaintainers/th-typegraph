@@ -12,7 +12,7 @@ import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.TypeGraph.Core (Field, pprint')
 import Language.Haskell.TH.TypeGraph.Expand (E, markExpanded, runExpanded)
 import Language.Haskell.TH.TypeGraph.Graph (GraphEdges)
-import Language.Haskell.TH.TypeGraph.Hints (VertexHint, HasTypes(hasTypes))
+import Language.Haskell.TH.TypeGraph.Hints (VertexHint)
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, typeGraphInfo, withTypeGraphInfo)
 import Language.Haskell.TH.TypeGraph.Monad (typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
@@ -20,9 +20,6 @@ import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
 import Language.Haskell.TH.Syntax (Lift(lift))
 
 data SetDifferences a = SetDifferences {unexpected :: Set a, missing :: Set a} deriving (Eq, Ord, Show)
-
-instance HasTypes () where
-    hasTypes () = []
 
 setDifferences :: Ord a => Set a -> Set a -> SetDifferences a
 setDifferences actual expected = SetDifferences {unexpected = Set.difference actual expected, missing = Set.difference expected actual}

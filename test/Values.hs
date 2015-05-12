@@ -163,8 +163,7 @@ typeGraphInfoOfType =
       "    Language.Haskell.TH.Syntax.PkgName -> fromList [(Language.Haskell.TH.Syntax.NameFlavour,Language.Haskell.TH.Syntax.NameG,Left 2)]",
       "    Language.Haskell.TH.Syntax.TyLit -> fromList [(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.LitT,Left 1)]",
       "    Language.Haskell.TH.Syntax.Type -> fromList [(Language.Haskell.TH.Syntax.TyVarBndr,Language.Haskell.TH.Syntax.KindedTV,Left 2),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.AppT,Left 1),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.AppT,Left 2),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.ForallT,Left 3),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.SigT,Left 1),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.SigT,Left 2)]",
-      "  hints:",
-      "  labels:" ]
+      "  hints:" ]
 #else
     [ "TypeGraphInfo:",
       "  typeSet:",
@@ -305,8 +304,7 @@ typeGraphInfoOfType =
       "    Language.Haskell.TH.Syntax.PkgName -> fromList [(Language.Haskell.TH.Syntax.NameFlavour,Language.Haskell.TH.Syntax.NameG,Left 2)]",
       "    Language.Haskell.TH.Syntax.TyLit -> fromList [(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.LitT,Left 1)]",
       "    Language.Haskell.TH.Syntax.Type -> fromList [(Language.Haskell.TH.Syntax.Pred,Language.Haskell.TH.Syntax.EqualP,Left 1),(Language.Haskell.TH.Syntax.Pred,Language.Haskell.TH.Syntax.EqualP,Left 2),(Language.Haskell.TH.Syntax.TyVarBndr,Language.Haskell.TH.Syntax.KindedTV,Left 2),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.AppT,Left 1),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.AppT,Left 2),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.ForallT,Left 3),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.SigT,Left 1),(Language.Haskell.TH.Syntax.Type,Language.Haskell.TH.Syntax.SigT,Left 2)]",
-      "  hints:",
-      "  labels:" ]
+      "  hints:" ]
 #endif
 
 subtypesOfType :: Set String

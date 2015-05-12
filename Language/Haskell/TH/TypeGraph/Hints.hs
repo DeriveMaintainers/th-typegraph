@@ -11,7 +11,8 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.TH.TypeGraph.Hints
     ( VertexHint(..)
-    , HasTypes(hasTypes)
+    , HasVertexHints(hasVertexHints)
+    , vertexHintTypes
     ) where
 
 import Data.Default (Default(def))
@@ -48,11 +49,13 @@ instance Ppr VertexHint where
     ppr (Divert x) = hcat [ptext "Divert (", ppr x, ptext ")"]
     ppr (Extra x) = hcat [ptext "Extra (", ppr x, ptext ")"]
 
--- | Class for finding embedded Type values
-class HasTypes a where
-    hasTypes :: a -> [Type]
+vertexHintTypes :: VertexHint -> [Type]
+vertexHintTypes (Divert x) = [x]
+vertexHintTypes (Extra x) = [x]
+vertexHintTypes _ = []
 
-instance HasTypes VertexHint where
-    hasTypes (Divert x) = [x]
-    hasTypes (Extra x) = [x]
-    hasTypes _ = []
+class HasVertexHints hint where
+    hasVertexHints :: hint -> [VertexHint]
+
+instance HasVertexHints VertexHint where
+    hasVertexHints = (: [])
