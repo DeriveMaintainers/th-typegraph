@@ -144,6 +144,8 @@ findEdges = do
       doField ::  Set TypeGraphVertex ->Name -> Name -> Either Int Name -> Type -> StateT (GraphEdges hint TypeGraphVertex) m ()
       doField vs tname cname fld ftyp = do
         v2 <- vertex (Just (tname, cname, fld)) ftyp
+        v3 <- vertex Nothing ftyp
+        edge v2 v3
         mapM_ (flip edge v2) (Set.toList vs)
         -- Here's where we don't recurse, see?
         -- doVertex v2
