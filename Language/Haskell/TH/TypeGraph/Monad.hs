@@ -39,7 +39,7 @@ import Language.Haskell.TH.TypeGraph.Core (Field)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Graph (cutVertex, GraphEdges)
 import Language.Haskell.TH.TypeGraph.Hints (HasVertexHints(hasVertexHints), VertexHint(..))
-import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, expanded, fields, hints, infoMap, synonyms, typeSet)
+import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, fields, hints, infoMap, synonyms, typeSet)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
@@ -78,7 +78,7 @@ fieldVertex etyp fld' = typeVertex etyp >>= \v -> return $ v {_field = Just fld'
 typeGraphEdges :: forall m hint. (DsMonad m, Default hint, Eq hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
                   m (GraphEdges hint TypeGraphVertex)
 typeGraphEdges = do
-  findEdges >>= execStateT (view hints >>= mapM (\(fld, typ, hint) -> mapM_ (doHint fld typ) (hasVertexHints hint)))
+  findEdges >>= execStateT (view hints >>= mapM (\(fld, typ, hint) -> hasVertexHints hint >>= mapM_ (doHint fld typ)))
     where
       doHint :: Maybe Field -> E Type -> VertexHint -> StateT (GraphEdges hint TypeGraphVertex) m ()
       doHint _ _ Normal = return ()
@@ -87,10 +87,10 @@ typeGraphEdges = do
       doHint fld etyp Hidden = do
         allVertices fld etyp >>= mapM_ (modify . cutVertex) . Set.toList
       doHint fld etyp (Divert typ') = do
-        v' <- expandType typ' >>= vertex Nothing
+        v' <- vertex Nothing typ'
         allVertices fld etyp >>= mapM_ (modify . Map.alter (alterFn (const (singleton v')))) . Set.toList
       doHint fld etyp (Extra typ') = do
-        v' <- expandType typ' >>= vertex Nothing
+        v' <- vertex Nothing typ'
         allVertices fld etyp >>= mapM_ (modify . Map.alter (alterFn (Set.insert v'))) . Set.toList
 
 alterFn :: Default hint => (Set TypeGraphVertex -> Set TypeGraphVertex) -> Maybe (hint, Set TypeGraphVertex) -> Maybe (hint, Set TypeGraphVertex)
@@ -107,20 +107,19 @@ findEdges :: forall hint m. (DsMonad m, Functor m, Default hint, MonadReader (Ty
 findEdges = do
   execStateT (view typeSet >>= \ts -> mapM_ doType (Set.toList ts)) mempty
     where
-      doType :: Type -> StateT (GraphEdges hint TypeGraphVertex) m ()
+      doType :: E Type -> StateT (GraphEdges hint TypeGraphVertex) m ()
       doType typ = do
-        em <- view expanded
-        vs <- expandType typ >>= allVertices Nothing
+        vs <- allVertices Nothing typ
         mapM_ node (Set.toList vs)
-        case em ! typ of
+        case typ of
           E (ConT tname) -> view infoMap >>= \ mp -> doInfo vs (mp ! tname)
           E (AppT typ1 typ2) -> do
-            v1 <- expandType typ1 >>= vertex Nothing
-            v2 <- expandType typ2 >>= vertex Nothing
+            v1 <- vertex Nothing (E typ1)
+            v2 <- vertex Nothing (E typ2)
             mapM_ (flip edge v1) (Set.toList vs)
             mapM_ (flip edge v2) (Set.toList vs)
-            doType typ1
-            doType typ2
+            doType (E typ1)
+            doType (E typ2)
           _ -> return ()
 
       doInfo :: Set TypeGraphVertex -> Info -> StateT (GraphEdges hint TypeGraphVertex) m ()
