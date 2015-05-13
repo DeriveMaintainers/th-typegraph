@@ -50,7 +50,7 @@ instance Ppr key => Ppr (GraphEdges label key) where
     ppr x =
         ptext $ intercalate "\n  " $
           "edges:" : (List.map
-                       (\ (k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ "->") : List.map pprint' (Set.toList ks)))
+                       (\ (k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ " ->") : List.map pprint' (Set.toList ks)))
                        (Map.toList x))
 
 -- | Remove a node and all its in- and out-edges.
