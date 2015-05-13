@@ -12,14 +12,18 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.TH.TypeGraph.Monad
-    ( vertex
-    , vertices
+    ( fieldVertices
+    , allVertices
+    , vertex
+    , typeVertex
+    , fieldVertex
     , typeGraphEdges
     , simpleEdges
     , simpleVertex
     ) where
 
 #if __GLASGOW_HASKELL__ < 709
+import Control.Applicative ((<$>))
 import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
@@ -33,7 +37,7 @@ import Data.Set as Set (delete, empty, insert, map, null, Set, singleton, toList
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.TypeGraph.Core (Field, pprint')
-import Language.Haskell.TH.TypeGraph.Expand (E(E))
+import Language.Haskell.TH.TypeGraph.Expand (E(E), Expanded, expandType)
 import Language.Haskell.TH.TypeGraph.Graph (cutVertex, GraphEdges)
 import Language.Haskell.TH.TypeGraph.Hints (HasVertexHints(hasVertexHints), VertexHint(..))
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, expanded, fields, hints, infoMap, synonyms, typeSet)
@@ -41,57 +45,54 @@ import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 
--- | Build a vertex from the given 'Type' and optional 'Field'.
-vertex :: MonadReader (TypeGraphInfo hint) m => Maybe Field -> Type -> m TypeGraphVertex
-vertex fld typ = do
-  em <- view expanded
-  let etyp = fromMaybe (error $ "vertex - unknown type: " ++ pprint' typ ++ "\n" ++
-                                intercalate "\n  " ("known:" : List.map pprint' (Map.keys em)))
-                       (Map.lookup typ em)
-  maybe (typeVertex etyp) (fieldVertex etyp) fld
-    where
-      typeVertex :: MonadReader (TypeGraphInfo hint) m => E Type -> m TypeGraphVertex
-      typeVertex etyp = do
-        sm <- view synonyms
-        return $ TypeGraphVertex {_field = Nothing, _syns = Map.findWithDefault Set.empty etyp sm, _etype = etyp}
-      fieldVertex :: MonadReader (TypeGraphInfo hint) m => E Type -> Field -> m TypeGraphVertex
-      fieldVertex etyp fld' = typeVertex etyp >>= \v -> return $ v {_field = Just fld'}
+allVertices :: (Functor m, DsMonad m, MonadReader (TypeGraphInfo hint) m) =>
+               Maybe Field -> E Type -> m (Set TypeGraphVertex)
+allVertices (Just fld) etyp = singleton <$> vertex (Just fld) etyp
+allVertices Nothing etyp = vertex Nothing etyp >>= \v -> fieldVertices v >>= \vs -> return $ Set.insert v vs
 
 -- | Build the vertices that involve a particular type - if the field
 -- is specified it return s singleton, otherwise it returns a set
 -- containing a vertex one for the type on its own, and one for each
 -- field containing that type.
-vertices :: MonadReader (TypeGraphInfo hint) m => Maybe Field -> Type -> m (Set TypeGraphVertex)
-vertices fld typ = do
+fieldVertices :: MonadReader (TypeGraphInfo hint) m => TypeGraphVertex -> m (Set TypeGraphVertex)
+fieldVertices v = do
   fm <- view fields
-  v <- vertex Nothing typ
-  case fld of
-    Nothing -> let fs = Map.findWithDefault Set.empty (view etype v) fm
-                   vs = Set.map (\fld' -> set field (Just fld') v) fs in
-               return $ Set.insert v vs
-    Just _ -> return $ singleton $ set field fld v
+  let fs = Map.findWithDefault Set.empty (view etype v) fm
+  return $ Set.map (\fld' -> set field (Just fld') v) fs
 
--- | Start with the type graph on the known types with no field
--- information, and build a new graph which incorporates the
--- information from the vertex hints.  This means splitting the nodes
--- according to record fields, because hints can refer to particular
--- fields of a record.
-typeGraphEdges :: forall m hint. (DsMonad m, Default hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) => m (GraphEdges hint TypeGraphVertex)
+-- | Build a vertex from the given 'Type' and optional 'Field'.
+vertex :: forall m typ hint. (DsMonad m, MonadReader (TypeGraphInfo hint) m) => Maybe Field -> E Type -> m TypeGraphVertex
+vertex fld etyp = maybe (typeVertex etyp) (fieldVertex etyp) fld
+
+-- | Build a non-field vertex
+typeVertex :: MonadReader (TypeGraphInfo hint) m => E Type -> m TypeGraphVertex
+typeVertex etyp = do
+  sm <- view synonyms
+  return $ TypeGraphVertex {_field = Nothing, _syns = Map.findWithDefault Set.empty etyp sm, _etype = etyp}
+
+-- | Build a vertex associated with a field
+fieldVertex :: MonadReader (TypeGraphInfo hint) m => E Type -> Field -> m TypeGraphVertex
+fieldVertex etyp fld' = typeVertex etyp >>= \v -> return $ v {_field = Just fld'}
+
+-- | Start with the type graph on the known types, and build a new
+-- graph which incorporates the information from the hints.
+typeGraphEdges :: forall m hint. (DsMonad m, Default hint, Eq hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
+                  m (GraphEdges hint TypeGraphVertex)
 typeGraphEdges = do
   findEdges >>= execStateT (view hints >>= mapM (\(fld, typ, hint) -> mapM_ (doHint fld typ) (hasVertexHints hint)))
     where
-      doHint :: Maybe Field -> Type -> VertexHint -> StateT (GraphEdges hint TypeGraphVertex) m ()
-      doHint fld typ Sink = do
-        vertices fld typ >>= mapM_ (modify . Map.alter (alterFn (const Set.empty))) . Set.toList
+      doHint :: Maybe Field -> E Type -> VertexHint -> StateT (GraphEdges hint TypeGraphVertex) m ()
       doHint _ _ Normal = return ()
-      doHint fld typ Hidden = do
-        vertices fld typ >>= mapM_ (modify . cutVertex) . Set.toList
-      doHint fld typ (Divert typ') = do
-        v' <- vertex Nothing typ'
-        vertices fld typ >>= mapM_ (modify . Map.alter (alterFn (const (singleton v')))) . Set.toList
-      doHint fld typ (Extra typ') = do
-        v' <- vertex Nothing typ'
-        vertices fld typ >>= mapM_ (modify . Map.alter (alterFn (Set.insert v'))) . Set.toList
+      doHint fld etyp Sink = do
+        allVertices fld etyp >>= mapM_ (modify . Map.alter (alterFn (const Set.empty))) . Set.toList
+      doHint fld etyp Hidden = do
+        allVertices fld etyp >>= mapM_ (modify . cutVertex) . Set.toList
+      doHint fld etyp (Divert typ') = do
+        v' <- expandType typ' >>= vertex Nothing
+        allVertices fld etyp >>= mapM_ (modify . Map.alter (alterFn (const (singleton v')))) . Set.toList
+      doHint fld etyp (Extra typ') = do
+        v' <- expandType typ' >>= vertex Nothing
+        allVertices fld etyp >>= mapM_ (modify . Map.alter (alterFn (Set.insert v'))) . Set.toList
 
 alterFn :: Default hint => (Set TypeGraphVertex -> Set TypeGraphVertex) -> Maybe (hint, Set TypeGraphVertex) -> Maybe (hint, Set TypeGraphVertex)
 alterFn setf (Just (hint, s)) = Just (hint, setf s)
@@ -102,7 +103,7 @@ alterFn setf Nothing = Just (def, setf Set.empty)
 -- fields, build and return the GraphEdges relation on TypeGraphVertex.
 -- This is not a recursive function, it stops when it reaches the field
 -- types.
-findEdges :: forall hint m. (Default hint, MonadReader (TypeGraphInfo hint) m) =>
+findEdges :: forall hint m. (DsMonad m, Functor m, Default hint, MonadReader (TypeGraphInfo hint) m) =>
              m (GraphEdges hint TypeGraphVertex)
 findEdges = do
   execStateT (view typeSet >>= \ts -> mapM_ doType (Set.toList ts)) mempty
@@ -110,13 +111,13 @@ findEdges = do
       doType :: Type -> StateT (GraphEdges hint TypeGraphVertex) m ()
       doType typ = do
         em <- view expanded
-        vs <- vertices Nothing typ
+        vs <- expandType typ >>= allVertices Nothing
         mapM_ node (Set.toList vs)
         case em ! typ of
           E (ConT tname) -> view infoMap >>= \ mp -> doInfo vs (mp ! tname)
           E (AppT typ1 typ2) -> do
-            v1 <- vertex Nothing typ1
-            v2 <- vertex Nothing typ2
+            v1 <- expandType typ1 >>= vertex Nothing
+            v2 <- expandType typ2 >>= vertex Nothing
             mapM_ (flip edge v1) (Set.toList vs)
             mapM_ (flip edge v2) (Set.toList vs)
             doType typ1
@@ -141,10 +142,10 @@ findEdges = do
       doCon vs tname (InfixC (_, lhs) cname (_, rhs)) = doField vs tname cname (Left 1) lhs >> doField vs tname cname (Left 2) rhs
 
       -- Connect the vertex for this record type to one particular field vertex
-      doField ::  Set TypeGraphVertex ->Name -> Name -> Either Int Name -> Type -> StateT (GraphEdges hint TypeGraphVertex) m ()
+      doField ::  DsMonad m => Set TypeGraphVertex -> Name -> Name -> Either Int Name -> Type -> StateT (GraphEdges hint TypeGraphVertex) m ()
       doField vs tname cname fld ftyp = do
-        v2 <- vertex (Just (tname, cname, fld)) ftyp
-        v3 <- vertex Nothing ftyp
+        v2 <- expandType ftyp >>= vertex (Just (tname, cname, fld))
+        v3 <- expandType ftyp >>= vertex Nothing
         edge v2 v3
         mapM_ (flip edge v2) (Set.toList vs)
         -- Here's where we don't recurse, see?

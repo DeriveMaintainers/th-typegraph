@@ -54,7 +54,7 @@ data TypeGraphInfo hint
       -- raw type and field values that are later used to construct
       -- the TypeGraphVertex, it is unsafe to do that until
       -- TypeGraphInfo is finalized.
-      , _hints :: [(Maybe Field, Type, hint)]
+      , _hints :: [(Maybe Field, E Type, hint)]
       } deriving (Show, Eq, Ord)
 
 instance Ppr hint => Ppr (TypeGraphInfo hint) where
@@ -146,7 +146,7 @@ collectTypeInfo typ0 = do
 -- | Add a hint to the TypeGraphInfo state and process any type it
 -- might contain.
 collectHintInfo :: (DsMonad m, HasVertexHints hint) => (Maybe Field, Type, hint) -> StateT (TypeGraphInfo hint) m ()
-collectHintInfo (fld, typ, h) = hints %= (++ [(fld, typ, h)]) -- ((v, h) :)
+collectHintInfo (fld, typ, h) = expandType typ >>= \etyp -> hints %= (++ [(fld, etyp, h)])
 
 -- | Build a TypeGraphInfo value by scanning the supplied types and hints.
 typeGraphInfo :: forall m hint. (DsMonad m, HasVertexHints hint) => [(Maybe Field, Type, hint)] -> [Type] -> m (TypeGraphInfo hint)

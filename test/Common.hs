@@ -66,7 +66,7 @@ withTypeGraphInfo' = withTypeGraphInfo
 
 -- | Return a mapping from vertex to all the known type synonyms for
 -- the type in that vertex.
-typeSynonymMap :: forall m hint. (DsMonad m, Default hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
+typeSynonymMap :: forall m hint. (DsMonad m, Default hint, Eq hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
                   m (Map TypeGraphVertex (Set Name))
 typeSynonymMap =
      (Map.filter (not . Set.null) .
@@ -75,7 +75,7 @@ typeSynonymMap =
       Map.keys) <$> typeGraphEdges
 
 -- | Like 'typeSynonymMap', but with all field information removed.
-typeSynonymMapSimple :: forall m hint. (DsMonad m, Default hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
+typeSynonymMapSimple :: forall m hint. (DsMonad m, Default hint, Eq hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
                         m (Map (E Type) (Set Name))
 typeSynonymMapSimple =
     simplify <$> typeSynonymMap

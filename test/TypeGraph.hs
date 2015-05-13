@@ -4,16 +4,18 @@
 {-# OPTIONS_GHC -Wall #-}
 module TypeGraph where
 
+#if __GLASGOW_HASKELL__ < 709
 import Control.Applicative ((<$>))
+#endif
 import Control.Lens
 import Data.List as List (map)
 import Data.Map as Map (fromList, keys)
 import Data.Set as Set (fromList, singleton)
 import Language.Haskell.TH
 import Language.Haskell.TH.TypeGraph.Core (typeArity)
-import Language.Haskell.TH.TypeGraph.Expand (runExpanded, E(E))
+import Language.Haskell.TH.TypeGraph.Expand (expandType, runExpanded, E(E))
 import Language.Haskell.TH.TypeGraph.Graph (mergeVerticesM {-filterVerticesM, extendEdges, mapVerticesM-})
-import Language.Haskell.TH.TypeGraph.Info (synonyms, withTypeGraphInfo, expanded)
+import Language.Haskell.TH.TypeGraph.Info (synonyms, withTypeGraphInfo)
 import Language.Haskell.TH.TypeGraph.Monad (vertex, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
 import Language.Haskell.TH.Desugar (withLocalDeclarations)
@@ -32,7 +34,7 @@ tests = do
      $([t|String|] >>= \ string -> typeGraphInfo' [] [string] >>= lift . view synonyms) `shouldBe` (Map.fromList [(E (AppT ListT (ConT ''Char)), Set.singleton ''String)])
 
   it "records a type synonym 2" $ do
-     $([t|String|] >>= \ string -> withTypeGraphInfo' [] [string] (vertex Nothing string) >>= lift) `shouldBe` (TypeGraphVertex Nothing (singleton ''String) (E (AppT ListT (ConT ''Char))))
+     $([t|String|] >>= \ string -> withTypeGraphInfo' [] [string] (expandType string >>= vertex Nothing) >>= lift) `shouldBe` (TypeGraphVertex Nothing (singleton ''String) (E (AppT ListT (ConT ''Char))))
 
   it "can build the TypeInfoGraph for Type" $ do
     $(runQ [t|Type|] >>= \typ -> typeGraphInfo' [] [typ] >>= lift . pprint) `shouldBe` typeGraphInfoOfType
