@@ -54,14 +54,14 @@ pprintPred = pprint' . unReify . runExpanded
 edgesToStrings :: GraphEdges label TypeGraphVertex -> [(String, [String])]
 edgesToStrings mp = List.map (\ (t, (_, s)) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
 
-typeGraphInfo' :: [(Maybe Field, E Type, VertexHint)] -> [E Type] -> Q (TypeGraphInfo VertexHint)
+typeGraphInfo' :: [(Maybe Field, E Type, VertexHint)] -> [Type] -> Q (TypeGraphInfo VertexHint)
 typeGraphInfo' = typeGraphInfo
 
 typeGraphEdges' :: forall m. (DsMonad m, MonadReader (TypeGraphInfo VertexHint) m) => m (GraphEdges VertexHint TypeGraphVertex)
 typeGraphEdges' = typeGraphEdges
 
 withTypeGraphInfo' :: forall m a. DsMonad m =>
-                      [(Maybe Field, E Type, VertexHint)] -> [E Type] -> ReaderT (TypeGraphInfo VertexHint) m a -> m a
+                      [(Maybe Field, E Type, VertexHint)] -> [Type] -> ReaderT (TypeGraphInfo VertexHint) m a -> m a
 withTypeGraphInfo' = withTypeGraphInfo
 
 -- | Return a mapping from vertex to all the known type synonyms for
