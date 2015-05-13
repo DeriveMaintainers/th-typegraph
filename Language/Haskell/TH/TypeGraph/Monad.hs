@@ -30,14 +30,13 @@ import Control.Lens -- (makeLenses, view)
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.State (execStateT, modify, StateT)
 import Data.Default (Default(def))
-import Data.List as List (intercalate, map)
-import Data.Map as Map ((!), findWithDefault, keys, lookup, map, mapKeys, mapWithKey, alter)
-import Data.Maybe (fromMaybe)
+import Data.List as List (map)
+import Data.Map as Map ((!), findWithDefault, map, mapKeys, mapWithKey, alter)
 import Data.Set as Set (delete, empty, insert, map, null, Set, singleton, toList)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
-import Language.Haskell.TH.TypeGraph.Core (Field, pprint')
-import Language.Haskell.TH.TypeGraph.Expand (E(E), Expanded, expandType)
+import Language.Haskell.TH.TypeGraph.Core (Field)
+import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Graph (cutVertex, GraphEdges)
 import Language.Haskell.TH.TypeGraph.Hints (HasVertexHints(hasVertexHints), VertexHint(..))
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, expanded, fields, hints, infoMap, synonyms, typeSet)
@@ -61,7 +60,7 @@ fieldVertices v = do
   return $ Set.map (\fld' -> set field (Just fld') v) fs
 
 -- | Build a vertex from the given 'Type' and optional 'Field'.
-vertex :: forall m typ hint. (DsMonad m, MonadReader (TypeGraphInfo hint) m) => Maybe Field -> E Type -> m TypeGraphVertex
+vertex :: forall m hint. (DsMonad m, MonadReader (TypeGraphInfo hint) m) => Maybe Field -> E Type -> m TypeGraphVertex
 vertex fld etyp = maybe (typeVertex etyp) (fieldVertex etyp) fld
 
 -- | Build a non-field vertex
