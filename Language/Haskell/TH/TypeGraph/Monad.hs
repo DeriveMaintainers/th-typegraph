@@ -37,7 +37,7 @@ import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.TypeGraph.Core (Field)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
-import Language.Haskell.TH.TypeGraph.Graph (cutVertex, GraphEdges)
+import Language.Haskell.TH.TypeGraph.Graph (cut, GraphEdges)
 import Language.Haskell.TH.TypeGraph.Hints (HasVertexHints(hasVertexHints), VertexHint(..))
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, fields, hints, infoMap, synonyms, typeSet)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field, typeNames)
@@ -94,7 +94,7 @@ typeGraphEdges = do
       doHint v Sink =
         modify $ Map.alter (alterFn (const Set.empty)) v
       doHint v Hidden =
-        modify $ cutVertex v
+        modify $ cut (singleton v)
       doHint v (Divert typ') = do
         v' <- expandType typ' >>= vertex Nothing
         case (null $ typeNames v) of

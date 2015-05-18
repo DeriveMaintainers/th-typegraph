@@ -11,8 +11,7 @@ module Language.Haskell.TH.TypeGraph
 
 import Language.Haskell.TH.TypeGraph.Core (FieldType(FieldType, fPos, fNameAndType), fName, fType, typeArity, pprint')
 import Language.Haskell.TH.TypeGraph.Expand (Expanded(markExpanded), runExpanded, E(E))
-import Language.Haskell.TH.TypeGraph.Graph (GraphEdges, graphFromMap,
-                                            cutVertex, cutVertices, cutVerticesM, mergeVertex, mergeVertices, mergeVerticesM)
+import Language.Haskell.TH.TypeGraph.Graph (GraphEdges, graphFromMap, cut, cutM, isolate, isolateM, dissolve, dissolveM)
 import Language.Haskell.TH.TypeGraph.Hints (VertexHint(Normal, Hidden, Sink, Divert, Extra))
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, fields, hints, infoMap, synonyms, typeSet,
                                            emptyTypeGraphInfo, typeGraphInfo, withTypeGraphInfo)
