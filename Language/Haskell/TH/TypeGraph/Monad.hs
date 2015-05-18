@@ -35,7 +35,7 @@ import Data.Map as Map ((!), findWithDefault, map, mapKeys, mapWithKey, alter)
 import Data.Set as Set (delete, empty, insert, map, Set, singleton)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
-import Language.Haskell.TH.TypeGraph.Core (Field, pprint')
+import Language.Haskell.TH.TypeGraph.Core (Field)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Graph (cutVertex, GraphEdges)
 import Language.Haskell.TH.TypeGraph.Hints (HasVertexHints(hasVertexHints), VertexHint(..))
@@ -44,8 +44,6 @@ import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field, 
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Prelude hiding (foldr, mapM_, null)
-
-import Debug.Trace
 
 import Data.Foldable (Foldable, foldr, mapM_)
 #if MIN_VERSION_base(4,8,0)
@@ -89,7 +87,7 @@ fieldVertex etyp fld' = typeVertex etyp >>= \v -> return $ v {_field = Just fld'
 typeGraphEdges :: forall m hint. (DsMonad m, Default hint, Eq hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
                   m (GraphEdges hint TypeGraphVertex)
 typeGraphEdges = do
-  findEdges >>= t1 >>= execStateT (view hints >>= mapM (\(fld, typ, hint) -> hasVertexHints hint >>= mapM_ (\vh -> allVertices fld typ >>= mapM_ (\v -> t3 v vh >> doHint v vh)))) >>= t2
+  findEdges {->>= t1-} >>= execStateT (view hints >>= mapM (\(fld, typ, hint) -> hasVertexHints hint >>= mapM_ (\vh -> allVertices fld typ >>= mapM_ (\v -> {-t3 v vh >>-} doHint v vh)))) {->>= t2-}
     where
       doHint :: TypeGraphVertex -> VertexHint -> StateT (GraphEdges hint TypeGraphVertex) m ()
       doHint _ Normal = return ()
@@ -106,9 +104,9 @@ typeGraphEdges = do
         v' <- expandType typ' >>= vertex Nothing
         modify $ Map.alter (alterFn (Set.insert v')) v
 
-      t1 x = trace ("before hints:\n" ++ pprint x) (return x)
-      t2 x = trace ("after hints:\n" ++ pprint x) (return x)
-      t3 v x = trace ("doHint " ++ pprint' v ++ ": " ++ pprint x) (return ())
+      -- t1 x = trace ("before hints:\n" ++ pprint x) (return x)
+      -- t2 x = trace ("after hints:\n" ++ pprint x) (return x)
+      -- t3 v x = trace ("doHint " ++ pprint' v ++ ": " ++ pprint x) (return ())
 
 alterFn :: Default hint => (Set TypeGraphVertex -> Set TypeGraphVertex) -> Maybe (hint, Set TypeGraphVertex) -> Maybe (hint, Set TypeGraphVertex)
 alterFn setf (Just (hint, s)) = Just (hint, setf s)

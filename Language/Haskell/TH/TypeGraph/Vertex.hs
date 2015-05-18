@@ -4,6 +4,7 @@ module Language.Haskell.TH.TypeGraph.Vertex
     ( TypeGraphVertex(..)
     , field, syns, etype
     , typeNames
+    , bestType
     , typeVertex -- old
     , fieldVertex -- old
     , oldVertex -- old
@@ -11,7 +12,7 @@ module Language.Haskell.TH.TypeGraph.Vertex
 
 import Control.Lens -- (makeLenses, view)
 import Data.List as List (concatMap, intersperse)
-import Data.Set as Set (empty, insert, Set, toList)
+import Data.Set as Set (empty, insert, minView, Set, toList)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.Desugar (DsMonad)
@@ -48,6 +49,10 @@ $(makeLenses ''TypeGraphVertex)
 typeNames :: TypeGraphVertex -> Set Name
 typeNames (TypeGraphVertex {_etype = E (ConT tname), _syns = s}) = Set.insert tname s
 typeNames (TypeGraphVertex {_syns = s}) = s
+
+bestType :: TypeGraphVertex -> Type
+bestType (TypeGraphVertex {_etype = E (ConT name)}) = ConT name
+bestType v = maybe (let (E x) = view etype v in x) (ConT . fst) (Set.minView (view syns v))
 
 instance Lift TypeGraphVertex where
     lift (TypeGraphVertex {_field = f, _syns = ns, _etype = t}) =
