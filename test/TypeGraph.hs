@@ -14,7 +14,7 @@ import Data.Set as Set (fromList, singleton)
 import Language.Haskell.TH
 import Language.Haskell.TH.TypeGraph.Core (typeArity)
 import Language.Haskell.TH.TypeGraph.Expand (expandType, runExpanded, E(E))
-import Language.Haskell.TH.TypeGraph.Graph (mergeVerticesM {-filterVerticesM, extendEdges, mapVerticesM-})
+import Language.Haskell.TH.TypeGraph.Graph (dissolveM)
 import Language.Haskell.TH.TypeGraph.Info (synonyms, withTypeGraphInfo)
 import Language.Haskell.TH.TypeGraph.Monad (vertex, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
@@ -64,7 +64,7 @@ tests = do
      setDifferences (Set.fromList $(withLocalDeclarations [] $
                                 runQ [t|Type|] >>= \typ ->
                                 withTypeGraphInfo [] [typ] typeGraphEdges' >>= return . simpleEdges >>=
-                                mergeVerticesM (\ v -> (== 0) <$> (typeArity . runExpanded . _etype) v) >>=
+                                dissolveM (\ v -> (/= 0) <$> (typeArity . runExpanded . _etype) v) >>=
                                 runQ . lift . edgesToStrings)) arity0TypeEdges
         `shouldBe` noDifferences
 #if 0
@@ -79,7 +79,7 @@ tests = do
      setDifferences (Set.fromList $(withLocalDeclarations [] $
                                 runQ [t|Dec|] >>= \typ ->
                                 withTypeGraphInfo [] [typ] typeGraphEdges' >>= return . simpleEdges >>=
-                                mergeVerticesM (\ v -> (== 0) <$> (typeArity . runExpanded . _etype) v) >>=
+                                dissolveM (\ v -> (/= 0) <$> (typeArity . runExpanded . _etype) v) >>=
                                 runQ . lift . edgesToStrings)) arity0DecEdges
         `shouldBe` noDifferences
 
