@@ -32,6 +32,7 @@ library
   exposed-modules:  Language.Haskell.TH.TypeGraph
                     Language.Haskell.TH.TypeGraph.Core
                     Language.Haskell.TH.TypeGraph.Expand
+                    Language.Haskell.TH.TypeGraph.Free
                     Language.Haskell.TH.TypeGraph.Graph
                     Language.Haskell.TH.TypeGraph.Hints
                     Language.Haskell.TH.TypeGraph.Info

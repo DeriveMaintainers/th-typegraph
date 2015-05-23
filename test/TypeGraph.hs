@@ -9,11 +9,12 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Lens
 import Data.List as List (map)
-import Data.Map as Map (fromList, keys)
+import Data.Map as Map (Map, fromList, keys)
 import Data.Set as Set (fromList, singleton)
 import Language.Haskell.TH
 import Language.Haskell.TH.TypeGraph.Core (typeArity)
 import Language.Haskell.TH.TypeGraph.Expand (expandType, runExpanded, E(E))
+import Language.Haskell.TH.TypeGraph.Free (freeTypeVars)
 import Language.Haskell.TH.TypeGraph.Graph (dissolveM)
 import Language.Haskell.TH.TypeGraph.Info (synonyms, withTypeGraphInfo)
 import Language.Haskell.TH.TypeGraph.Monad (vertex, simpleEdges)
@@ -110,3 +111,9 @@ tests = do
      $(withLocalDeclarations [] $
        runQ [t|Dec|] >>= \typ -> withTypeGraphInfo [] [typ] (typeSynonymMapSimple >>= runQ . lift)) `shouldBe` decTypeSynonyms
 #endif
+
+  it "can find the free type variable names in: Map k a" $ do
+    $(runQ (appT (appT (conT ''Map) (varT (mkName "k"))) (varT (mkName "a"))) >>= freeTypeVars >>= runQ . lift . show) `shouldBe` "fromList [a,k]"
+
+  it "can find the free type variable names in: Map Int String" $ do
+    $(runQ [t|Map Int String|] >>= freeTypeVars  >>= runQ . lift . show) `shouldBe` "fromList []"
