@@ -16,14 +16,10 @@ module Language.Haskell.TH.TypeGraph.Core
     , constructorName
     -- * Queries
     , typeArity
-    , unlifted
     -- * Pretty print without extra whitespace
     , pprint'
     ) where
 
-#if __GLASGOW_HASKELL__ < 709
-import Control.Applicative ((<$>), (<*>))
-#endif
 import Data.Generics (Data, everywhere, mkT)
 import Data.Map as Map (Map, fromList, toList)
 import Data.Set as Set (Set, fromList, toList)
@@ -138,35 +134,6 @@ typeArity typ = error $ "typeArity - unexpected type: " ++ show typ
 -- white space (newlines, tabs, etc.) converted to a single space.
 pprint' :: Ppr a => a -> [Char]
 pprint' typ = unwords $ words $ pprint typ
-
--- | Does the type or the declaration to which it refers contain a
--- primitive (aka unlifted) type?  This will traverse down any 'Dec'
--- to the named types, and then check whether any of their 'Info'
--- records are 'PrimTyConI' values.
-class IsUnlifted t where
-    unlifted :: Quasi m => t -> m Bool
-
-instance IsUnlifted Dec where
-    unlifted (DataD _ _ _ cons _) = or <$> mapM unlifted cons
-    unlifted (NewtypeD _ _ _ con _) = unlifted con
-    unlifted (TySynD _ _ typ) = unlifted typ
-    unlifted _ = return False
-
-instance IsUnlifted Con where
-    unlifted (ForallC _ _ con) = unlifted con
-    unlifted (NormalC _ ts) = or <$> mapM (unlifted . snd) ts
-    unlifted (RecC _ ts) = or <$> mapM (\ (_, _, t) -> unlifted t) ts
-    unlifted (InfixC t1 _ t2) = or <$> mapM (unlifted . snd) [t1, t2]
-
-instance IsUnlifted Type where
-    unlifted (ForallT _ _ typ) = unlifted typ
-    unlifted (ConT name) = qReify name >>= unlifted
-    unlifted (AppT t1 t2) = (||) <$> unlifted t1 <*> unlifted t2
-    unlifted _ = return False
-
-instance IsUnlifted Info where
-    unlifted (PrimTyConI _ _ _) = return True
-    unlifted _ = return False -- traversal stops here
 
 instance Lift a => Lift (Set a) where
     lift s = [|Set.fromList $(lift (Set.toList s))|]
