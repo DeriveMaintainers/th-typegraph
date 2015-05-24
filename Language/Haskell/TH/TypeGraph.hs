@@ -14,7 +14,7 @@ import Language.Haskell.TH.TypeGraph.Expand (Expanded(markExpanded), runExpanded
 import Language.Haskell.TH.TypeGraph.Graph (GraphEdges, graphFromMap, cut, cutM, isolate, isolateM, dissolve, dissolveM)
 import Language.Haskell.TH.TypeGraph.Hints (VertexHint(Normal, Hidden, Sink, Divert, Extra))
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, fields, hints, infoMap, synonyms, typeSet,
-                                           emptyTypeGraphInfo, typeGraphInfo, withTypeGraphInfo)
+                                           emptyTypeGraphInfo, typeGraphInfo)
 import Language.Haskell.TH.TypeGraph.Monad (vertex, allVertices, typeGraphEdges, simpleEdges, simpleVertex)
 import Language.Haskell.TH.TypeGraph.Unsafe ()
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex, field, syns, etype, typeNames)

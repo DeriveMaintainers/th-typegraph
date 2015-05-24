@@ -14,14 +14,12 @@ module Language.Haskell.TH.TypeGraph.Info
     , emptyTypeGraphInfo
     , typeGraphInfo
     , fields, hints, infoMap, synonyms, typeSet
-    , withTypeGraphInfo
     ) where
 
 #if __GLASGOW_HASKELL__ < 709
 import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
-import Control.Monad.Reader (ReaderT, runReaderT)
 import Control.Monad.State (execStateT, StateT)
 import Data.List as List (intercalate, map)
 import Data.Map as Map (insert, insertWith, Map, toList)
@@ -84,10 +82,6 @@ instance Lift hint => Lift (TypeGraphInfo hint) where
 emptyTypeGraphInfo :: TypeGraphInfo hint
 emptyTypeGraphInfo = TypeGraphInfo {_typeSet = mempty, _infoMap = mempty, _expanded = mempty, _synonyms = mempty, _fields = mempty, _hints = mempty}
 
-withTypeGraphInfo :: forall m hint a. (DsMonad m, HasVertexHints hint) =>
-                     [(Maybe Field, E Type, hint)] -> [Type] -> ReaderT (TypeGraphInfo hint) m a -> m a
-withTypeGraphInfo hintList types action = typeGraphInfo hintList types >>= runReaderT action
-
 -- | Collect the graph information for one type and all the types
 -- reachable from it.
 collectTypeInfo :: forall m hint. (DsMonad m, HasVertexHints hint) => Type -> StateT (TypeGraphInfo hint) m ()
@@ -149,11 +143,6 @@ collectHintInfo :: (DsMonad m, HasVertexHints hint) => (Maybe Field, E Type, hin
 collectHintInfo (fld, etyp, h) = hints %= (++ [(fld, etyp, h)])
 
 -- | Build a TypeGraphInfo value by scanning the supplied types and hints.
-{-
-typeGraphInfo :: forall m hint. (DsMonad m, HasVertexHints hint) => [(Maybe Field, Type, hint)] -> [Type] -> m (TypeGraphInfo hint)
-typeGraphInfo hintList types = flip execStateT emptyTypeGraphInfo $ do
-  mapM_ collectTypeInfo (types ++ concatMap (concatMap vertexHintTypes . hasVertexHints . view _3) hintList)
--}
 typeGraphInfo :: forall m hint. (DsMonad m, HasVertexHints hint) => [(Maybe Field, E Type, hint)] -> [Type] -> m (TypeGraphInfo hint)
 typeGraphInfo hintList types = flip execStateT emptyTypeGraphInfo $ do
   mapM hasVertexHints (List.map (view _3) hintList) >>= mapM_ collectTypeInfo . (types ++) . concatMap vertexHintTypes . concat

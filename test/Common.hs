@@ -15,7 +15,7 @@ import Language.Haskell.TH.TypeGraph.Core (Field, pprint')
 import Language.Haskell.TH.TypeGraph.Expand (E, markExpanded, runExpanded)
 import Language.Haskell.TH.TypeGraph.Graph (GraphEdges)
 import Language.Haskell.TH.TypeGraph.Hints (HasVertexHints, VertexHint)
-import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, typeGraphInfo, withTypeGraphInfo)
+import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, typeGraphInfo)
 import Language.Haskell.TH.TypeGraph.Monad (typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
 
@@ -54,15 +54,11 @@ pprintPred = pprint' . unReify . runExpanded
 edgesToStrings :: GraphEdges label TypeGraphVertex -> [(String, [String])]
 edgesToStrings mp = List.map (\ (t, (_, s)) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
 
-typeGraphInfo' :: [(Maybe Field, E Type, VertexHint)] -> [Type] -> Q (TypeGraphInfo VertexHint)
+typeGraphInfo' :: DsMonad m => [(Maybe Field, E Type, VertexHint)] -> [Type] -> m (TypeGraphInfo VertexHint)
 typeGraphInfo' = typeGraphInfo
 
 typeGraphEdges' :: forall m. (DsMonad m, MonadReader (TypeGraphInfo VertexHint) m) => m (GraphEdges VertexHint TypeGraphVertex)
 typeGraphEdges' = typeGraphEdges
-
-withTypeGraphInfo' :: forall m a. DsMonad m =>
-                      [(Maybe Field, E Type, VertexHint)] -> [Type] -> ReaderT (TypeGraphInfo VertexHint) m a -> m a
-withTypeGraphInfo' = withTypeGraphInfo
 
 -- | Return a mapping from vertex to all the known type synonyms for
 -- the type in that vertex.

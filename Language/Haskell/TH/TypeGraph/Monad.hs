@@ -87,27 +87,39 @@ fieldVertex etyp fld' = typeVertex etyp >>= \v -> return $ v {_field = Just fld'
 typeGraphEdges :: forall m hint. (DsMonad m, Default hint, Eq hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
                   m (GraphEdges hint TypeGraphVertex)
 typeGraphEdges = do
-  findEdges {->>= t1-} >>= execStateT (view hints >>= mapM (\(fld, typ, hint) -> hasVertexHints hint >>= mapM_ (\vh -> allVertices fld typ >>= mapM_ (\v -> {-t3 v vh >>-} doHint v vh)))) {->>= t2-}
+  findEdges {->>= t1-} >>= execStateT (view hints >>= mapM doHint) {->>= t2-}
     where
-      doHint :: TypeGraphVertex -> VertexHint -> StateT (GraphEdges hint TypeGraphVertex) m ()
-      doHint _ Normal = return ()
-      doHint v Sink =
+      doHint :: (Maybe Field, E Type, hint) -> StateT (GraphEdges hint TypeGraphVertex) m ()
+      doHint (fld, typ, hint) = hasVertexHints hint >>= mapM_ (\vh -> allVertices fld typ >>= mapM_ (\v -> {-t3 v vh >>-} doVertexHint v vh))
+
+      doVertexHint :: TypeGraphVertex -> VertexHint -> StateT (GraphEdges hint TypeGraphVertex) m ()
+      doVertexHint _ Normal = return ()
+      doVertexHint v Sink =
         modify $ Map.alter (alterFn (const Set.empty)) v
-      doHint v Hidden =
+      doVertexHint v Hidden =
         modify $ cut (singleton v)
-      doHint v (Divert typ') = do
+      -- Replace all out edges with a single edge to typ'
+      doVertexHint v (Divert typ') = do
         v' <- expandType typ' >>= vertex Nothing
+#if 0
+        modify $ Map.alter (alterFn (const (singleton v'))) v
+#else
+        -- This is here because we want a path to ReportIntendedUse even
+        -- though there is a substitution of String on Maybe ReportIntendedUse.
+        -- I'm going to try to remove the Maybe from that substitution.
         case (null $ typeNames v) of
           False -> modify $ Map.alter (alterFn (const (singleton v'))) v
           True -> modify $ Map.alter (alterFn (Set.insert v')) v
-      doHint v (Extra typ') = do
+#endif
+      doVertexHint v (Extra typ') = do
         v' <- expandType typ' >>= vertex Nothing
         modify $ Map.alter (alterFn (Set.insert v')) v
 
       -- t1 x = trace ("before hints:\n" ++ pprint x) (return x)
       -- t2 x = trace ("after hints:\n" ++ pprint x) (return x)
-      -- t3 v x = trace ("doHint " ++ pprint' v ++ ": " ++ pprint x) (return ())
+      -- t3 v x = trace ("doVertexHint " ++ pprint' v ++ ": " ++ pprint x) (return ())
 
+-- | build the function argument of Map.alter for the GraphEdges map.
 alterFn :: Default hint => (Set TypeGraphVertex -> Set TypeGraphVertex) -> Maybe (hint, Set TypeGraphVertex) -> Maybe (hint, Set TypeGraphVertex)
 alterFn setf (Just (hint, s)) = Just (hint, setf s)
 alterFn setf Nothing | null (setf Set.empty) = Nothing
