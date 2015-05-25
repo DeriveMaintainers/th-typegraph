@@ -45,10 +45,11 @@ import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Prelude hiding (foldr, mapM_, null)
 
-import Data.Foldable (Foldable, foldr, mapM_)
+import Data.Foldable (mapM_)
 #if MIN_VERSION_base(4,8,0)
 import Data.Foldable (null)
 #else
+import Data.Foldable (Foldable, foldr)
 null :: Foldable t => t a -> Bool
 null = foldr (\_ _ -> False) True
 #endif

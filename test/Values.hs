@@ -120,7 +120,6 @@ typeGraphInfoOfType =
       "    [GHC.Types.Char] -> [GHC.Types.Char]",
       "    [Language.Haskell.TH.Syntax.Pred] -> [Language.Haskell.TH.Syntax.Type]",
       "    [Language.Haskell.TH.Syntax.TyVarBndr] -> [Language.Haskell.TH.Syntax.TyVarBndr]",
-      "    [Language.Haskell.TH.Syntax.Type] -> [Language.Haskell.TH.Syntax.Type]",
       "    GHC.Base.String -> [GHC.Types.Char]",
       "    GHC.Prim.ByteArray# -> GHC.Prim.ByteArray#",
       "    GHC.Prim.Char# -> GHC.Prim.Char#",

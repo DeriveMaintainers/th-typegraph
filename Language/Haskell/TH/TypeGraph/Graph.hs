@@ -18,7 +18,9 @@ module Language.Haskell.TH.TypeGraph.Graph
     , dissolveM
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>))
+#endif
 
 import Control.Lens (over, _2)
 import Control.Monad (filterM)
