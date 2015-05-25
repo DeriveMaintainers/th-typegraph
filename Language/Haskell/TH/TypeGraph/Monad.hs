@@ -89,8 +89,8 @@ typeGraphEdges :: forall m hint. (DsMonad m, Default hint, Eq hint, HasVertexHin
 typeGraphEdges = do
   findEdges {->>= t1-} >>= execStateT (view hints >>= mapM doHint) {->>= t2-}
     where
-      doHint :: (Maybe Field, E Type, hint) -> StateT (GraphEdges hint TypeGraphVertex) m ()
-      doHint (fld, typ, hint) = hasVertexHints hint >>= mapM_ (\vh -> allVertices fld typ >>= mapM_ (\v -> {-t3 v vh >>-} doVertexHint v vh))
+      doHint :: (Maybe Field, Name, hint) -> StateT (GraphEdges hint TypeGraphVertex) m ()
+      doHint (fld, tname, hint) = hasVertexHints hint >>= mapM_ (\vh -> expandType (ConT tname) >>= allVertices fld >>= mapM_ (\v -> {-t3 v vh >>-} doVertexHint v vh))
 
       doVertexHint :: TypeGraphVertex -> VertexHint -> StateT (GraphEdges hint TypeGraphVertex) m ()
       doVertexHint _ Normal = return ()

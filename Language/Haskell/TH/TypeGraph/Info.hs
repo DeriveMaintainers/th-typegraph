@@ -49,7 +49,7 @@ data TypeGraphInfo hint
       -- ^ The types with all type synonyms replaced with their expansions.
       , _fields :: Map (E Type) (Set (Name, Name, Either Int Name))
       -- ^ Map from field type to field names
-      , _hints :: [(Maybe Field, E Type, hint)]
+      , _hints :: [(Maybe Field, Name, hint)]
       -- ^ Hints that modify the shape of the type graph. The key is the
       -- raw type and field values that are later used to construct
       -- the TypeGraphVertex, it is unsafe to do that until
@@ -65,7 +65,7 @@ instance Ppr hint => Ppr (TypeGraphInfo hint) where
           ppe = intercalate "\n    " ("expanded:" : concatMap (lines . (\ (typ, (E etyp)) -> pprint typ ++ " -> " ++ pprint etyp)) (Map.toList e))
           pps = intercalate "\n    " ("synonyms:" : concatMap (lines . (\ (typ, ns) -> pprint typ ++ " -> " ++ show ns)) (Map.toList s))
           ppf = intercalate "\n    " ("fields:" : concatMap (lines . (\ (typ, fs) -> pprint typ ++ " -> " ++ show fs)) (Map.toList f))
-          pph = intercalate "\n    " ("hints:" : concatMap (lines . (\ (fld, typ, h) -> pprint (fld, typ) ++ " -> " ++ pprint h)) hs)
+          pph = intercalate "\n    " ("hints:" : concatMap (lines . (\ (fld, tname, h) -> pprint (fld, (ConT tname)) ++ " -> " ++ pprint h)) hs)
 
 $(makeLenses ''TypeGraphInfo)
 
@@ -139,11 +139,11 @@ collectTypeInfo typ0 = do
 
 -- | Add a hint to the TypeGraphInfo state and process any type it
 -- might contain.
-collectHintInfo :: (DsMonad m, HasVertexHints hint) => (Maybe Field, E Type, hint) -> StateT (TypeGraphInfo hint) m ()
-collectHintInfo (fld, etyp, h) = hints %= (++ [(fld, etyp, h)])
+collectHintInfo :: (DsMonad m, HasVertexHints hint) => (Maybe Field, Name, hint) -> StateT (TypeGraphInfo hint) m ()
+collectHintInfo (fld, tname, h) = hints %= (++ [(fld, tname, h)])
 
 -- | Build a TypeGraphInfo value by scanning the supplied types and hints.
-typeGraphInfo :: forall m hint. (DsMonad m, HasVertexHints hint) => [(Maybe Field, E Type, hint)] -> [Type] -> m (TypeGraphInfo hint)
+typeGraphInfo :: forall m hint. (DsMonad m, HasVertexHints hint) => [(Maybe Field, Name, hint)] -> [Type] -> m (TypeGraphInfo hint)
 typeGraphInfo hintList types = flip execStateT emptyTypeGraphInfo $ do
   mapM hasVertexHints (List.map (view _3) hintList) >>= mapM_ collectTypeInfo . (types ++) . concatMap vertexHintTypes . concat
   mapM_ collectHintInfo hintList
