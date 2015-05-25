@@ -2,13 +2,13 @@
 
 # th-typegraph requires template-haskell>=2.9, so ghc-7.6 is too old
 env:
- - CABALVER=1.18 GHCVER=7.8.3 HAPPYVER=1.19.4 ALEXVER=3.1.3
- - CABALVER=1.22 GHCVER=7.10.1 HAPPYVER=1.19.4 ALEXVER=3.1.3
- - CABALVER=head GHCVER=head HAPPYVER=1.19.4 ALEXVER=3.1.3   # see section about GHC HEAD snapshots
+ - CABALVER=1.18 GHCVER=7.8.4 HAPPYVER=1.19.5 ALEXVER=3.1.4
+ - CABALVER=1.22 GHCVER=7.10.2 HAPPYVER=1.19.5 ALEXVER=3.1.4
+ - CABALVER=head GHCVER=head HAPPYVER=1.19.5 ALEXVER=3.1.4   # see section about GHC HEAD snapshots
 
 matrix:
   allow_failures:
-    - env: CABALVER=head GHCVER=head HAPPYVER=1.19.4 ALEXVER=3.1.3
+    - env: CABALVER=head GHCVER=head HAPPYVER=1.19.5 ALEXVER=3.1.4
 
 # Note: the distinction between `before_install` and `install` is not important.
 before_install:
