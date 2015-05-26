@@ -10,8 +10,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.TH.TypeGraph.Hints
-    ( SinkType
-    , VertexHint(..)
+    ( VertexHint(..)
     , HasVertexHints(hasVertexHints)
     , vertexHintTypes
     ) where
@@ -23,11 +22,6 @@ import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (hcat, ptext)
 import Language.Haskell.TH.Syntax (Lift(lift))
-
--- | If a type is an instance of this class no paths that lead to the
--- internal stucture of the value will be created - the value is
--- considered atomic.
-class SinkType a
 
 -- | When a VertexHint value is associated with a Type it describes
 -- alterations in the type graph from the usual default.
