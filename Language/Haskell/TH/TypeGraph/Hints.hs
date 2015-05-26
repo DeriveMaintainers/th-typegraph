@@ -27,7 +27,6 @@ import Language.Haskell.TH.Syntax (Lift(lift))
 -- alterations in the type graph from the usual default.
 data VertexHint
     = Normal          -- ^ normal case
-    | Hidden          -- ^ don't create this vertex, no in or out edges
     | Divert Type     -- ^ replace all out edges with an edge to an alternate type
     | Extra Type      -- ^ add an extra out edge to the given type
     deriving (Eq, Ord, Show)
@@ -37,13 +36,11 @@ instance Default VertexHint where
 
 instance Lift VertexHint where
     lift Normal = [|Normal|]
-    lift Hidden = [|Hidden|]
     lift (Divert x) = [|Divert $(lift x)|]
     lift (Extra x) = [|Extra $(lift x)|]
 
 instance Ppr VertexHint where
     ppr Normal = ptext "Normal"
-    ppr Hidden = ptext "Hidden"
     ppr (Divert x) = hcat [ptext "Divert (", ppr x, ptext ")"]
     ppr (Extra x) = hcat [ptext "Extra (", ppr x, ptext ")"]
 
