@@ -30,29 +30,20 @@ import Control.Lens -- (makeLenses, view)
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.State (execStateT, modify, StateT)
 import Data.Default (Default(def))
+import Data.Foldable
 import Data.List as List (map)
-import Data.Map as Map ((!), findWithDefault, map, mapKeys, mapWithKey, alter)
+import Data.Map as Map ((!), alter, findWithDefault, map, mapKeys, mapWithKey)
 import Data.Set as Set (delete, empty, insert, map, Set, singleton)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.TypeGraph.Core (Field)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
-import Language.Haskell.TH.TypeGraph.Graph (cut, GraphEdges)
-import Language.Haskell.TH.TypeGraph.Hints (HasVertexHints(hasVertexHints), VertexHint(..))
-import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, fields, hints, infoMap, synonyms, typeSet)
-import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field, typeNames)
+import Language.Haskell.TH.TypeGraph.Graph (GraphEdges)
+import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, fields, infoMap, synonyms, typeSet)
+import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Prelude hiding (foldr, mapM_, null)
-
-import Data.Foldable (mapM_)
-#if MIN_VERSION_base(4,8,0)
-import Data.Foldable (null)
-#else
-import Data.Foldable (Foldable, foldr)
-null :: Foldable t => t a -> Bool
-null = foldr (\_ _ -> False) True
-#endif
 
 allVertices :: (Functor m, DsMonad m, MonadReader (TypeGraphInfo hint) m) =>
                Maybe Field -> E Type -> m (Set TypeGraphVertex)
@@ -83,56 +74,13 @@ typeVertex etyp = do
 fieldVertex :: MonadReader (TypeGraphInfo hint) m => E Type -> Field -> m TypeGraphVertex
 fieldVertex etyp fld' = typeVertex etyp >>= \v -> return $ v {_field = Just fld'}
 
--- | Start with the type graph on the known types, and build a new
--- graph which incorporates the information from the hints.
-typeGraphEdges :: forall m hint. (DsMonad m, Default hint, Eq hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
-                  m (GraphEdges hint TypeGraphVertex)
-typeGraphEdges = do
-  findEdges {->>= t1-} >>= execStateT (view hints >>= mapM doHint) {->>= t2-}
-    where
-      doHint :: (Maybe Field, Name, hint) -> StateT (GraphEdges hint TypeGraphVertex) m ()
-      doHint (fld, tname, hint) = hasVertexHints hint >>= mapM_ (\vh -> expandType (ConT tname) >>= allVertices fld >>= mapM_ (\v -> {-t3 v vh >>-} doVertexHint v vh))
-
-      doVertexHint :: TypeGraphVertex -> VertexHint -> StateT (GraphEdges hint TypeGraphVertex) m ()
-      doVertexHint _ Normal = return ()
-      doVertexHint v Sink =
-        modify $ Map.alter (alterFn (const Set.empty)) v
-      doVertexHint v Hidden =
-        modify $ cut (singleton v)
-      -- Replace all out edges with a single edge to typ'
-      doVertexHint v (Divert typ') = do
-        v' <- expandType typ' >>= vertex Nothing
-#if 0
-        modify $ Map.alter (alterFn (const (singleton v'))) v
-#else
-        -- This is here because we want a path to ReportIntendedUse even
-        -- though there is a substitution of String on Maybe ReportIntendedUse.
-        -- I'm going to try to remove the Maybe from that substitution.
-        case (null $ typeNames v) of
-          False -> modify $ Map.alter (alterFn (const (singleton v'))) v
-          True -> modify $ Map.alter (alterFn (Set.insert v')) v
-#endif
-      doVertexHint v (Extra typ') = do
-        v' <- expandType typ' >>= vertex Nothing
-        modify $ Map.alter (alterFn (Set.insert v')) v
-
-      -- t1 x = trace ("before hints:\n" ++ pprint x) (return x)
-      -- t2 x = trace ("after hints:\n" ++ pprint x) (return x)
-      -- t3 v x = trace ("doVertexHint " ++ pprint' v ++ ": " ++ pprint x) (return ())
-
--- | build the function argument of Map.alter for the GraphEdges map.
-alterFn :: Default hint => (Set TypeGraphVertex -> Set TypeGraphVertex) -> Maybe (hint, Set TypeGraphVertex) -> Maybe (hint, Set TypeGraphVertex)
-alterFn setf (Just (hint, s)) = Just (hint, setf s)
-alterFn setf Nothing | null (setf Set.empty) = Nothing
-alterFn setf Nothing = Just (def, setf Set.empty)
-
 -- | Given the discovered set of types and maps of type synonyms and
 -- fields, build and return the GraphEdges relation on TypeGraphVertex.
 -- This is not a recursive function, it stops when it reaches the field
 -- types.
-findEdges :: forall hint m. (DsMonad m, Functor m, Default hint, MonadReader (TypeGraphInfo hint) m) =>
-             m (GraphEdges hint TypeGraphVertex)
-findEdges = do
+typeGraphEdges :: forall hint m. (DsMonad m, Functor m, Default hint, MonadReader (TypeGraphInfo hint) m) =>
+                  m (GraphEdges hint TypeGraphVertex)
+typeGraphEdges = do
   execStateT (view typeSet >>= \ts -> mapM_ (\t -> expandType t >>= doType) ts) mempty
     where
       doType :: E Type -> StateT (GraphEdges hint TypeGraphVertex) m ()
