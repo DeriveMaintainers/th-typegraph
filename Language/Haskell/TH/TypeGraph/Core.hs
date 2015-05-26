@@ -18,8 +18,10 @@ module Language.Haskell.TH.TypeGraph.Core
     , typeArity
     -- * Pretty print without extra whitespace
     , pprint'
+    , unlifted
     ) where
 
+import Control.Applicative ((<$>), (<*>))
 import Data.Generics (Data, everywhere, mkT)
 import Data.Map as Map (Map, fromList, toList)
 import Data.Set as Set (Set, fromList, toList)
@@ -143,3 +145,32 @@ instance (Lift a, Lift b) => Lift (Map a b) where
 
 instance Lift (E Type) where
     lift etype = [|markExpanded $(lift (runExpanded etype))|]
+
+-- | Does the type or the declaration to which it refers contain a
+-- primitive (aka unlifted) type?  This will traverse down any 'Dec'
+-- to the named types, and then check whether any of their 'Info'
+-- records are 'PrimTyConI' values.
+class IsUnlifted t where
+    unlifted :: Quasi m => t -> m Bool
+
+instance IsUnlifted Dec where
+    unlifted (DataD _ _ _ cons _) = or <$> mapM unlifted cons
+    unlifted (NewtypeD _ _ _ con _) = unlifted con
+    unlifted (TySynD _ _ typ) = unlifted typ
+    unlifted _ = return False
+
+instance IsUnlifted Con where
+    unlifted (ForallC _ _ con) = unlifted con
+    unlifted (NormalC _ ts) = or <$> mapM (unlifted . snd) ts
+    unlifted (RecC _ ts) = or <$> mapM (\ (_, _, t) -> unlifted t) ts
+    unlifted (InfixC t1 _ t2) = or <$> mapM (unlifted . snd) [t1, t2]
+
+instance IsUnlifted Type where
+    unlifted (ForallT _ _ typ) = unlifted typ
+    unlifted (ConT name) = qReify name >>= unlifted
+    unlifted (AppT t1 t2) = (||) <$> unlifted t1 <*> unlifted t2
+    unlifted _ = return False
+
+instance IsUnlifted Info where
+    unlifted (PrimTyConI _ _ _) = return True
+    unlifted _ = return False -- traversal stops here
