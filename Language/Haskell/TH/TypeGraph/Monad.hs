@@ -32,8 +32,9 @@ import Control.Monad.State (execStateT, modify, StateT)
 import Data.Default (Default(def))
 import Data.Foldable
 import Data.List as List (map)
-import Data.Map as Map ((!), alter, findWithDefault, map, mapKeys, mapWithKey)
-import Data.Set as Set (delete, empty, insert, map, Set, singleton)
+import Data.Map as Map ((!), alter, findWithDefault, map, mapKeysWith, mapWithKey)
+import Data.Monoid (Monoid, (<>))
+import Data.Set as Set (delete, empty, insert, map, Set, singleton, union)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.TypeGraph.Core (Field)
@@ -138,10 +139,12 @@ typeGraphEdges = do
 -- | Simplify a graph by throwing away the field information in each
 -- node.  This means the nodes only contain the fully expanded Type
 -- value (and any type synonyms.)
-simpleEdges :: GraphEdges hint TypeGraphVertex -> GraphEdges hint TypeGraphVertex
+simpleEdges :: Monoid hint => GraphEdges hint TypeGraphVertex -> GraphEdges hint TypeGraphVertex
 simpleEdges = Map.mapWithKey (\v (n, s) -> (n, Set.delete v s)) .    -- delete any self edges
-              Map.mapKeys simpleVertex .               -- simplify each vertex
+              Map.mapKeysWith combine simpleVertex .   -- simplify each vertex
               Map.map (over _2 (Set.map simpleVertex)) -- simplify the out edges
+    where
+      combine (n1, s1) (n2, s2) = (n1 <> n2, Set.union s1 s2)
 
 simpleVertex :: TypeGraphVertex -> TypeGraphVertex
 simpleVertex v = v {_field = Nothing}
