@@ -46,7 +46,7 @@ import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Prelude hiding (foldr, mapM_, null)
 
-allVertices :: (Functor m, DsMonad m, MonadReader (TypeGraphInfo hint) m) =>
+allVertices :: (Functor m, DsMonad m, MonadReader TypeGraphInfo m) =>
                Maybe Field -> E Type -> m (Set TypeGraphVertex)
 allVertices (Just fld) etyp = singleton <$> vertex (Just fld) etyp
 allVertices Nothing etyp = vertex Nothing etyp >>= \v -> fieldVertices v >>= \vs -> return $ Set.insert v vs
@@ -55,31 +55,31 @@ allVertices Nothing etyp = vertex Nothing etyp >>= \v -> fieldVertices v >>= \vs
 -- is specified it return s singleton, otherwise it returns a set
 -- containing a vertex one for the type on its own, and one for each
 -- field containing that type.
-fieldVertices :: MonadReader (TypeGraphInfo hint) m => TypeGraphVertex -> m (Set TypeGraphVertex)
+fieldVertices :: MonadReader TypeGraphInfo m => TypeGraphVertex -> m (Set TypeGraphVertex)
 fieldVertices v = do
   fm <- view fields
   let fs = Map.findWithDefault Set.empty (view etype v) fm
   return $ Set.map (\fld' -> set field (Just fld') v) fs
 
 -- | Build a vertex from the given 'Type' and optional 'Field'.
-vertex :: forall m hint. (DsMonad m, MonadReader (TypeGraphInfo hint) m) => Maybe Field -> E Type -> m TypeGraphVertex
+vertex :: forall m. (DsMonad m, MonadReader TypeGraphInfo m) => Maybe Field -> E Type -> m TypeGraphVertex
 vertex fld etyp = maybe (typeVertex etyp) (fieldVertex etyp) fld
 
 -- | Build a non-field vertex
-typeVertex :: MonadReader (TypeGraphInfo hint) m => E Type -> m TypeGraphVertex
+typeVertex :: MonadReader TypeGraphInfo m => E Type -> m TypeGraphVertex
 typeVertex etyp = do
   sm <- view synonyms
   return $ TypeGraphVertex {_field = Nothing, _syns = Map.findWithDefault Set.empty etyp sm, _etype = etyp}
 
 -- | Build a vertex associated with a field
-fieldVertex :: MonadReader (TypeGraphInfo hint) m => E Type -> Field -> m TypeGraphVertex
+fieldVertex :: MonadReader TypeGraphInfo m => E Type -> Field -> m TypeGraphVertex
 fieldVertex etyp fld' = typeVertex etyp >>= \v -> return $ v {_field = Just fld'}
 
 -- | Given the discovered set of types and maps of type synonyms and
 -- fields, build and return the GraphEdges relation on TypeGraphVertex.
 -- This is not a recursive function, it stops when it reaches the field
 -- types.
-typeGraphEdges :: forall hint m. (DsMonad m, Functor m, Default hint, MonadReader (TypeGraphInfo hint) m) =>
+typeGraphEdges :: forall hint m. (DsMonad m, Functor m, Default hint, MonadReader TypeGraphInfo m) =>
                   m (GraphEdges hint TypeGraphVertex)
 typeGraphEdges = do
   execStateT (view typeSet >>= \ts -> mapM_ (\t -> expandType t >>= doType) ts) mempty
