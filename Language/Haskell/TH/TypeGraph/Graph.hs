@@ -35,9 +35,9 @@ import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.TypeGraph.Core (pprint')
 import Prelude hiding (foldr)
 
-type GraphEdges label key = Map key (label, Set key)
+type GraphEdges node key = Map key (node, Set key)
 
-instance Ppr key => Ppr (GraphEdges label key) where
+instance Ppr key => Ppr (GraphEdges node key) where
     ppr x =
         ptext $ intercalate "\n  " $
           "edges:" : (List.map
@@ -48,26 +48,26 @@ instance Ppr key => Ppr (GraphEdges label key) where
 -- from a type to one of the types it contains.  Thus, each edge
 -- represents a primitive lens, and each path in the graph is a
 -- composition of lenses.
-graphFromMap :: forall label key. (Ord key) =>
-                GraphEdges label key -> (Graph, Vertex -> (label, key, [key]), key -> Maybe Vertex)
+graphFromMap :: forall node key. (Ord key) =>
+                GraphEdges node key -> (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex)
 graphFromMap mp =
     graphFromEdges triples
     where
-      triples :: [(label, key, [key])]
+      triples :: [(node, key, [key])]
       triples = List.map (\ (k, (node, ks)) -> (node, k, toList ks)) $ Map.toList mp
 
 -- | Isolate and remove some nodes
-cut :: (Eq a, Ord a) => Set a -> GraphEdges label a -> GraphEdges label a
+cut :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
 cut victims edges = Map.filterWithKey (\v _ -> not (Set.member v victims)) (isolate victims edges)
 
 -- | Monadic predicate version of 'cut'.
-cutM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges label a -> m (GraphEdges label a)
+cutM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
 cutM victim edges = do
   victims <- Set.fromList <$> filterM victim (Map.keys edges)
   return $ cut victims edges
 
 -- | Remove all the in- and out-edges of some nodes
-isolate :: (Eq a, Ord a) => Set a -> GraphEdges label a -> GraphEdges label a
+isolate :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
 isolate victims edges =
     edges''
     where
@@ -75,17 +75,17 @@ isolate victims edges =
       edges'' = Map.map (over _2 (Set.filter (not . (`Set.member` victims)))) edges' -- Remove the in-edges
 
 -- | Monadic predicate version of 'isolate'.
-isolateM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges label a -> m (GraphEdges label a)
+isolateM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
 isolateM victim edges = do
   victims <- Set.fromList <$> filterM victim (Map.keys edges)
   return $ isolate victims edges
 
 -- | Remove some nodes and extend each of their in-edges to each of
 -- their out-edges
-dissolve :: (Eq a, Ord a) => Set a -> GraphEdges label a -> GraphEdges label a
+dissolve :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
 dissolve victims edges0 = foldr dissolve1 edges0 victims
     where
-      dissolve1 :: (Eq a, Ord a) => a -> GraphEdges label a -> GraphEdges label a
+      dissolve1 :: (Eq a, Ord a) => a -> GraphEdges node a -> GraphEdges node a
       dissolve1 victim edges =
           -- Wherever the victim vertex appears as an out-edge, substitute the vOut set
           Map.mapWithKey (\k (h, s) -> (h, extend k s)) survivorEdges
@@ -98,7 +98,7 @@ dissolve victims edges0 = foldr dissolve1 edges0 victims
             (victimEdges, survivorEdges) = partitionWithKey (\v _ -> (v == victim)) edges
 
 -- | Monadic predicate version of 'dissolve'.
-dissolveM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges label a -> m (GraphEdges label a)
+dissolveM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
 dissolveM victim edges = do
   victims <- Set.fromList <$> filterM victim (Map.keys edges)
   return $ dissolve victims edges
