@@ -34,7 +34,6 @@ library
                     Language.Haskell.TH.TypeGraph.Expand
                     Language.Haskell.TH.TypeGraph.Free
                     Language.Haskell.TH.TypeGraph.Graph
-                    Language.Haskell.TH.TypeGraph.Hints
                     Language.Haskell.TH.TypeGraph.Info
                     Language.Haskell.TH.TypeGraph.Monad
                     Language.Haskell.TH.TypeGraph.Unsafe
