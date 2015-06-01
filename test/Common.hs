@@ -14,7 +14,7 @@ import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.TypeGraph.Core (Field, pprint')
 import Language.Haskell.TH.TypeGraph.Expand (E, markExpanded, runExpanded)
 import Language.Haskell.TH.TypeGraph.Graph (GraphEdges)
-import Language.Haskell.TH.TypeGraph.Hints (HasVertexHints, VertexHint(..))
+import Language.Haskell.TH.TypeGraph.Hints (VertexHint(..))
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, typeGraphInfo)
 import Language.Haskell.TH.TypeGraph.Monad (typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
@@ -24,9 +24,6 @@ import Language.Haskell.TH.Syntax (Lift(lift))
 instance Monoid VertexHint where
     mempty = Normal
     mappend Normal x = x
-    mappend x Normal = x
-    mappend x@(Divert _) _ = x
-    mappend _ x@(Divert _) = x
     mappend x _ = x
 
 data SetDifferences a = SetDifferences {unexpected :: Set a, missing :: Set a} deriving (Eq, Ord, Show)
@@ -62,24 +59,24 @@ pprintPred = pprint' . unReify . runExpanded
 edgesToStrings :: GraphEdges label TypeGraphVertex -> [(String, [String])]
 edgesToStrings mp = List.map (\ (t, (_, s)) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
 
-typeGraphInfo' :: DsMonad m => [(Maybe Field, Name, VertexHint)] -> [Type] -> m (TypeGraphInfo VertexHint)
+typeGraphInfo' :: DsMonad m => [Type] -> m TypeGraphInfo
 typeGraphInfo' = typeGraphInfo
 
-typeGraphEdges' :: forall m. (DsMonad m, MonadReader (TypeGraphInfo VertexHint) m) => m (GraphEdges VertexHint TypeGraphVertex)
+typeGraphEdges' :: forall m. (DsMonad m, MonadReader TypeGraphInfo m) => m (GraphEdges VertexHint TypeGraphVertex)
 typeGraphEdges' = typeGraphEdges
 
 -- | Return a mapping from vertex to all the known type synonyms for
 -- the type in that vertex.
-typeSynonymMap :: forall m hint. (DsMonad m, Default hint, Eq hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
+typeSynonymMap :: forall m. (DsMonad m, MonadReader TypeGraphInfo m) =>
                   m (Map TypeGraphVertex (Set Name))
 typeSynonymMap =
      (Map.filter (not . Set.null) .
       Map.fromList .
       List.map (\node -> (node, _syns node)) .
-      Map.keys) <$> typeGraphEdges
+      Map.keys) <$> (typeGraphEdges :: m (GraphEdges VertexHint TypeGraphVertex))
 
 -- | Like 'typeSynonymMap', but with all field information removed.
-typeSynonymMapSimple :: forall m hint. (DsMonad m, Default hint, Eq hint, HasVertexHints hint, MonadReader (TypeGraphInfo hint) m) =>
+typeSynonymMapSimple :: forall m. (DsMonad m, MonadReader TypeGraphInfo m) =>
                         m (Map (E Type) (Set Name))
 typeSynonymMapSimple =
     simplify <$> typeSynonymMap

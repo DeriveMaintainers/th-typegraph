@@ -129,6 +129,6 @@ collectTypeInfo typ0 = do
         fields %= Map.insertWith union etyp (singleton fld)
         doType ftyp
 
--- | Build a TypeGraphInfo value by scanning the supplied types and hints.
+-- | Build a TypeGraphInfo value by scanning the supplied types
 typeGraphInfo :: forall m. DsMonad m => [Type] -> m TypeGraphInfo
 typeGraphInfo types = flip execStateT emptyTypeGraphInfo $ mapM_ collectTypeInfo types

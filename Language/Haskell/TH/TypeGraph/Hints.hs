@@ -11,14 +11,11 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.TH.TypeGraph.Hints
     ( VertexHint(..)
-    , HasVertexHints(hasVertexHints)
-    , vertexHintTypes
     ) where
 
 import Data.Default (Default(def))
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
-import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax (Lift(lift))
@@ -37,12 +34,3 @@ instance Lift VertexHint where
 
 instance Ppr VertexHint where
     ppr Normal = ptext "Normal"
-
-vertexHintTypes :: VertexHint -> [Type]
-vertexHintTypes _ = []
-
-class HasVertexHints hint where
-    hasVertexHints :: DsMonad m => hint -> m [VertexHint]
-
-instance HasVertexHints VertexHint where
-    hasVertexHints h = return [h]
