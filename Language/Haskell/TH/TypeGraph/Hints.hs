@@ -20,15 +20,13 @@ import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
-import Language.Haskell.TH.PprLib (hcat, ptext)
+import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax (Lift(lift))
 
 -- | When a VertexHint value is associated with a Type it describes
 -- alterations in the type graph from the usual default.
 data VertexHint
     = Normal          -- ^ normal case
-    | Divert Type     -- ^ replace all out edges with an edge to an alternate type
-    | Extra Type      -- ^ add an extra out edge to the given type
     deriving (Eq, Ord, Show)
 
 instance Default VertexHint where
@@ -36,17 +34,11 @@ instance Default VertexHint where
 
 instance Lift VertexHint where
     lift Normal = [|Normal|]
-    lift (Divert x) = [|Divert $(lift x)|]
-    lift (Extra x) = [|Extra $(lift x)|]
 
 instance Ppr VertexHint where
     ppr Normal = ptext "Normal"
-    ppr (Divert x) = hcat [ptext "Divert (", ppr x, ptext ")"]
-    ppr (Extra x) = hcat [ptext "Extra (", ppr x, ptext ")"]
 
 vertexHintTypes :: VertexHint -> [Type]
-vertexHintTypes (Divert x) = [x]
-vertexHintTypes (Extra x) = [x]
 vertexHintTypes _ = []
 
 class HasVertexHints hint where
