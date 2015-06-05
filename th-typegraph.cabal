@@ -1,5 +1,5 @@
 name:               th-typegraph
-version:            0.18
+version:            0.19
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
@@ -36,6 +36,7 @@ library
                     Language.Haskell.TH.TypeGraph.Graph
                     Language.Haskell.TH.TypeGraph.Info
                     Language.Haskell.TH.TypeGraph.Monad
+                    Language.Haskell.TH.TypeGraph.Shape
                     Language.Haskell.TH.TypeGraph.Unsafe
                     Language.Haskell.TH.TypeGraph.Vertex
   default-language: Haskell2010
