@@ -35,7 +35,6 @@ fName :: FieldType -> Maybe Name
 fName (Positional _ _) = Nothing
 fName (Named (x, _, _)) = Just x
 
--- | fType' with leading foralls stripped
 fType :: FieldType -> Type
 fType (Positional _ (_, x)) = x
 fType (Named (_, _, x)) = x

@@ -15,6 +15,6 @@ import Language.Haskell.TH.TypeGraph.Graph (GraphEdges, graphFromMap, cut, cutM,
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, fields, infoMap, synonyms, typeSet,
                                            emptyTypeGraphInfo, typeGraphInfo)
 import Language.Haskell.TH.TypeGraph.Monad (vertex, allVertices, typeGraphEdges, simpleEdges, simpleVertex)
-import Language.Haskell.TH.TypeGraph.Shape (FieldType, fPos, fName, fType)
+import Language.Haskell.TH.TypeGraph.Shape (FieldType, fPos, fName)
 import Language.Haskell.TH.TypeGraph.Unsafe ()
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex, field, syns, etype, typeNames)

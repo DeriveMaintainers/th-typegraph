@@ -28,6 +28,7 @@ import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
 import Language.Haskell.TH.TypeGraph.Core (pprint')
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
+import Language.Haskell.TH.TypeGraph.Vertex ()
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext)

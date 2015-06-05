@@ -3,48 +3,23 @@
 {-# LANGUAGE CPP, DeriveDataTypeable, FlexibleInstances, RankNTypes, ScopedTypeVariables, TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.TH.TypeGraph.Core
-    ( -- * Type describing a record field
-      Field
+    (
     -- * Queries
-    , typeArity
+      typeArity
     , unlifted
-    -- * Pretty print without extra whitespace
+    -- * Pretty printing
     , pprint'
-    , unReify
-    , unReifyName
     ) where
 
 import Control.Applicative ((<$>), (<*>))
-import Data.Generics (Data, everywhere, mkT)
-import Data.Map as Map (Map, fromList, toList)
-import Data.Set as Set (Set, fromList, toList)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar ({- instances -})
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax
-import Language.Haskell.TH.TypeGraph.Expand (E, markExpanded, runExpanded)
-
-type Field = ( Name, -- type name
-               Name, -- constructor name
-               Either Int -- field position
-                      Name -- field name
-             )
 
 instance Ppr () where
     ppr () = ptext "()"
-
-instance Ppr Field where
-    ppr (tname, cname, field) = ptext $
-        "field " ++
-        show (unReifyName tname) ++ "." ++
-        either (\ n -> show (unReifyName cname) ++ "[" ++ show n ++ "]") (\ f -> show (unReifyName f)) field
-
-instance Ppr (Maybe Field, E Type) where
-    ppr (mf, typ) = ptext $ pprint typ ++ maybe "" (\fld -> " (field " ++ pprint fld ++ ")") mf
-
-instance Ppr (Maybe Field, Type) where
-    ppr (mf, typ) = ptext $ pprint typ ++ " (unexpanded)" ++ maybe "" (\fld -> " (field " ++ pprint fld ++ ")") mf
 
 -- | Compute the arity of a type - the number of type parameters that
 -- must be applied to it in order to obtain a concrete type.
@@ -71,21 +46,6 @@ typeArity typ = error $ "typeArity - unexpected type: " ++ show typ
 -- white space (newlines, tabs, etc.) converted to a single space.
 pprint' :: Ppr a => a -> [Char]
 pprint' typ = unwords $ words $ pprint typ
-
-unReify :: Data a => a -> a
-unReify = everywhere (mkT unReifyName)
-
-unReifyName :: Name -> Name
-unReifyName = mkName . nameBase
-
-instance Lift a => Lift (Set a) where
-    lift s = [|Set.fromList $(lift (Set.toList s))|]
-
-instance (Lift a, Lift b) => Lift (Map a b) where
-    lift mp = [|Map.fromList $(lift (Map.toList mp))|]
-
-instance Lift (E Type) where
-    lift etype = [|markExpanded $(lift (runExpanded etype))|]
 
 -- | Does the type or the declaration to which it refers contain a
 -- primitive (aka unlifted) type?  This will traverse down any 'Dec'
