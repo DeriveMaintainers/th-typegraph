@@ -6,9 +6,11 @@ module Language.Haskell.TH.TypeGraph.Shape
     , fName
     , fType
     , foldShape
-    -- * Constructor deconstructors
+    -- * Deconstructors
     , constructorName
     , constructorFields
+    , declarationName
+    , declarationType
     ) where
 
 import Data.Generics (Data)
@@ -71,3 +73,25 @@ constructorFields (ForallC _ _ con) = constructorFields con
 constructorFields (NormalC _ ts) = map (uncurry Positional) (zip [1..] ts)
 constructorFields (RecC _ ts) = map Named ts
 constructorFields (InfixC t1 _ t2) = [Positional 1 t1, Positional 2 t2]
+
+declarationName :: Dec -> Maybe Name
+declarationName (FunD name _) = Just name
+declarationName (ValD _pat _body _decs) = Nothing
+declarationName (DataD _ name _ _ _) = Just name
+declarationName (NewtypeD _ name _ _ _) = Just name
+declarationName (TySynD name _ _) = Just name
+declarationName (ClassD _ name _ _ _) = Just name
+declarationName (InstanceD _ _ _) = Nothing
+declarationName (SigD name _) = Just name
+declarationName (ForeignD _) = Nothing
+declarationName (InfixD _ name) = Just name
+declarationName (PragmaD _) = Nothing
+declarationName (FamilyD _ name _ _) = Nothing
+declarationName (DataInstD _ name _ _ _) = Just name
+declarationName (NewtypeInstD _ name _ _ _) = Just name
+declarationName (TySynInstD name _) = Just name
+declarationName (ClosedTypeFamilyD name _ _ _) = Just name
+declarationName (RoleAnnotD name _) = Just name
+
+declarationType :: Dec -> Maybe Type
+declarationType = fmap ConT . declarationName
