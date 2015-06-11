@@ -11,12 +11,12 @@ import Data.Set as Set (Set, difference, empty, fromList, null, toList, union)
 import Data.Generics (Data, everywhere, mkT)
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar (DsMonad)
-import Language.Haskell.TH.TypeGraph.Core (Field, pprint')
+import Language.Haskell.TH.TypeGraph.Core (pprint')
 import Language.Haskell.TH.TypeGraph.Expand (E, markExpanded, runExpanded)
 import Language.Haskell.TH.TypeGraph.Graph (GraphEdges)
 import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, typeGraphInfo)
 import Language.Haskell.TH.TypeGraph.Monad (typeGraphEdges)
-import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
+import Language.Haskell.TH.TypeGraph.Vertex (Field, TypeGraphVertex(..))
 
 import Language.Haskell.TH.Syntax (Lift(lift))
 

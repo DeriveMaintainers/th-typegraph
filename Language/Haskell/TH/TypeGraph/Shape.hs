@@ -29,13 +29,12 @@ instance Ppr FieldType where
     ppr (Positional x _) = ptext $ show x
     ppr (Named (x, _, _)) = ptext $ nameBase x
 
-fPos :: FieldType -> Maybe Int
-fPos (Positional x _) = Just x
-fPos (Named _) = Nothing
+fPos :: FieldType -> Either Int Name
+fPos = fName
 
-fName :: FieldType -> Maybe Name
-fName (Positional _ _) = Nothing
-fName (Named (x, _, _)) = Just x
+fName :: FieldType -> Either Int Name
+fName (Positional x _) = Left x
+fName (Named (x, _, _)) = Right x
 
 fType :: FieldType -> Type
 fType (Positional _ (_, x)) = x
