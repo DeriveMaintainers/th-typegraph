@@ -1,5 +1,5 @@
 name:               th-typegraph
-version:            0.19
+version:            0.20
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
@@ -30,7 +30,6 @@ library
     th-orphans >= 0.10.0
   ghc-options:      -Wall
   exposed-modules:  Language.Haskell.TH.TypeGraph
-                    Language.Haskell.TH.TypeGraph.Core
                     Language.Haskell.TH.TypeGraph.Expand
                     Language.Haskell.TH.TypeGraph.Free
                     Language.Haskell.TH.TypeGraph.Graph

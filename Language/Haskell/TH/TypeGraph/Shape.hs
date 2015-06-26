@@ -1,18 +1,23 @@
 -- | A fold on the shape of a record.
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE CPP, DeriveDataTypeable #-}
 module Language.Haskell.TH.TypeGraph.Shape
-    ( FieldType(..)
-    , fPos
-    , fName
-    , fType
-    , foldShape
+    ( pprint'
+    , unlifted
     -- * Deconstructors
     , constructorName
     , constructorFields
     , declarationName
     , declarationType
+    -- * Field name and position
+    , FieldType(..)
+    , fPos
+    , fName
+    , fType
+    -- * Decl shape
+    , foldShape
     ) where
 
+import Control.Applicative ((<$>), (<*>))
 import Data.Generics (Data)
 import Data.Typeable (Typeable)
 import Language.Haskell.Exts.Syntax ()
@@ -20,6 +25,43 @@ import Language.Haskell.TH
 import Language.Haskell.TH.Desugar ({- instances -})
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax
+
+instance Ppr () where
+    ppr () = ptext "()"
+
+-- | Pretty print a 'Ppr' value on a single line with each block of
+-- white space (newlines, tabs, etc.) converted to a single space.
+pprint' :: Ppr a => a -> [Char]
+pprint' typ = unwords $ words $ pprint typ
+
+-- | Does the type or the declaration to which it refers contain a
+-- primitive (aka unlifted) type?  This will traverse down any 'Dec'
+-- to the named types, and then check whether any of their 'Info'
+-- records are 'PrimTyConI' values.
+class IsUnlifted t where
+    unlifted :: Quasi m => t -> m Bool
+
+instance IsUnlifted Dec where
+    unlifted (DataD _ _ _ cons _) = or <$> mapM unlifted cons
+    unlifted (NewtypeD _ _ _ con _) = unlifted con
+    unlifted (TySynD _ _ typ) = unlifted typ
+    unlifted _ = return False
+
+instance IsUnlifted Con where
+    unlifted (ForallC _ _ con) = unlifted con
+    unlifted (NormalC _ ts) = or <$> mapM (unlifted . snd) ts
+    unlifted (RecC _ ts) = or <$> mapM (\ (_, _, t) -> unlifted t) ts
+    unlifted (InfixC t1 _ t2) = or <$> mapM (unlifted . snd) [t1, t2]
+
+instance IsUnlifted Type where
+    unlifted (ForallT _ _ typ) = unlifted typ
+    unlifted (ConT name) = qReify name >>= unlifted
+    unlifted (AppT t1 t2) = (||) <$> unlifted t1 <*> unlifted t2
+    unlifted _ = return False
+
+instance IsUnlifted Info where
+    unlifted (PrimTyConI _ _ _) = return True
+    unlifted _ = return False -- traversal stops here
 
 -- FieldType and Field should be merged, or made less rudundant.
 
@@ -85,12 +127,16 @@ declarationName (SigD name _) = Just name
 declarationName (ForeignD _) = Nothing
 declarationName (InfixD _ name) = Just name
 declarationName (PragmaD _) = Nothing
-declarationName (FamilyD _ name _ _) = Nothing
+declarationName (FamilyD _ _name _ _) = Nothing
 declarationName (DataInstD _ name _ _ _) = Just name
 declarationName (NewtypeInstD _ name _ _ _) = Just name
 declarationName (TySynInstD name _) = Just name
 declarationName (ClosedTypeFamilyD name _ _ _) = Just name
 declarationName (RoleAnnotD name _) = Just name
+#if MIN_VERSION_template_haskell(2,10,0)
+declarationName (StandaloneDerivD _ _) = Nothing
+declarationName (DefaultSigD name _) = Just name
+#endif
 
 declarationType :: Dec -> Maybe Type
 declarationType = fmap ConT . declarationName

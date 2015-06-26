@@ -32,7 +32,7 @@ import qualified Data.Map as Map (toList)
 import Data.Set as Set (Set, delete, empty, filter, member, fromList, union, unions)
 import Language.Haskell.TH (Ppr(ppr))
 import Language.Haskell.TH.PprLib (ptext)
-import Language.Haskell.TH.TypeGraph.Core (pprint')
+import Language.Haskell.TH.TypeGraph.Shape (pprint')
 import Prelude hiding (foldr)
 
 type GraphEdges node key = Map key (node, Set key)
