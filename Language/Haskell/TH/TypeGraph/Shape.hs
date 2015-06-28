@@ -115,7 +115,7 @@ constructorFields (NormalC _ ts) = map (uncurry Positional) (zip [1..] ts)
 constructorFields (RecC _ ts) = map Named ts
 constructorFields (InfixC t1 _ t2) = [Positional 1 t1, Positional 2 t2]
 
-declarationName :: Dec -> Maybe Name
+declarationName :: Monad m => Dec -> m Name
 declarationName (FunD name _) = Just name
 declarationName (ValD _pat _body _decs) = Nothing
 declarationName (DataD _ name _ _ _) = Just name
