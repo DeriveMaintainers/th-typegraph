@@ -33,7 +33,7 @@ import Data.Default (Default(def))
 import Data.Foldable
 import Data.List as List (map)
 import Data.Map as Map ((!), alter, findWithDefault, map, mapKeysWith, mapWithKey)
-import Data.Monoid ((<>))
+import Data.Monoid (Monoid, (<>))
 import Data.Set as Set (delete, empty, insert, map, Set, singleton, union)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
