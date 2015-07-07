@@ -41,7 +41,7 @@ instance Ppr key => Ppr (GraphEdges node key) where
     ppr x =
         ptext $ intercalate "\n  " $
           "edges:" : (List.map
-                       (\(k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ " ->") : List.map pprint' (toList ks)))
+                       (\(k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ " ->" ++ if null ks then " []" else "") : List.map pprint' (toList ks)))
                        (Map.toList x))
 
 -- | Build a graph from the result of typeGraphEdges, each edge goes

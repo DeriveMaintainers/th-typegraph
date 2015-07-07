@@ -19,6 +19,7 @@ extra-source-files: test/Common.hs test/Tests.hs test/TypeGraph.hs test/Values.h
 library
   build-depends:
     base >= 4.2 && < 5,
+    base-compat,
     containers,
     data-default,
     haskell-src-exts,

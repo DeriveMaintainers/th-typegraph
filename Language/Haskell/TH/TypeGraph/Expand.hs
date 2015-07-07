@@ -54,7 +54,7 @@ expandPred :: (DsMonad m, Expanded Pred e)  => Pred -> m e
 #if MIN_VERSION_template_haskell(2,10,0)
 expandPred = expandType
 #else
-expandPred (ClassP className typeParameters) = markExpanded <$> (ClassP className . map runExpanded) <$> mapM expandType typeParameters
+expandPred (ClassP className typeParameters) = expandClassP className typeParameters
 expandPred (EqualP type1 type2) = markExpanded <$> (EqualP <$> (runExpanded <$> expandType type1) <*> (runExpanded <$> expandType type2))
 #endif
 
