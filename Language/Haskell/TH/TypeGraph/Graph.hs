@@ -18,7 +18,7 @@ module Language.Haskell.TH.TypeGraph.Graph
     , dissolveM
     ) where
 
-#if !MIN_VERSION_base(4,8,0)
+#if __GLASGOW_HASKELL__ < 709
 import Control.Applicative ((<$>))
 #endif
 

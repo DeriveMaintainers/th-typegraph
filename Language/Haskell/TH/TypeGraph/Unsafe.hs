@@ -11,7 +11,7 @@ module Language.Haskell.TH.TypeGraph.Unsafe () where
 import Language.Haskell.TH.TypeGraph.Expand (Expanded(markExpanded, runExpanded'))
 import Language.Haskell.TH (Type)
 
-#if !MIN_VERSION_template_haskell(2,10,0)
+#if __GLASGOW_HASKELL__ < 709
 import Language.Haskell.TH (Pred)
 
 instance Expanded Pred Pred where

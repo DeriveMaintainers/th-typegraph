@@ -133,7 +133,7 @@ declarationName (NewtypeInstD _ name _ _ _) = Just name
 declarationName (TySynInstD name _) = Just name
 declarationName (ClosedTypeFamilyD name _ _ _) = Just name
 declarationName (RoleAnnotD name _) = Just name
-#if MIN_VERSION_template_haskell(2,10,0)
+#if __GLASGOW_HASKELL__ >= 709
 declarationName (StandaloneDerivD _ _) = Nothing
 declarationName (DefaultSigD name _) = Just name
 #endif

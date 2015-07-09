@@ -64,7 +64,7 @@ instance FreeTypeVars Type where
       mapM_ go_pred cx
       result %= (`Set.difference` (Set.fromList (map tvbName tvbs)))
         where
-#if MIN_VERSION_template_haskell(2,10,0)
+#if __GLASGOW_HASKELL__ >= 709
           go_pred typ =
               -- This looks wrong as the one below looks wrong.  Wronger maybe.
               ftv typ
@@ -153,7 +153,7 @@ instance FreeTypeVars Info where
 
 instance FreeTypeVars Dec where
     ftv dec@(DataD _ _ _ _ _ _) = ftv dec
-#if MIN_VERSION_template_haskell(2,10,0)
+#if __GLASGOW_HASKELL__ >= 709
     go_pred = go
 #else
     go_pred (ClassP _ tys) = freeNamesOfTypes tys

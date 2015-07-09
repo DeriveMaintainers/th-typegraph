@@ -51,7 +51,7 @@ expandType typ = markExpanded <$> DS.typeToTH <$> (DS.dsType typ >>= DS.expand)
 -- | Apply the th-desugar expand function to a 'Pred' and mark it as expanded.
 -- Note that the definition of 'Pred' changed in template-haskell-2.10.0.0.
 expandPred :: (DsMonad m, Expanded Pred e)  => Pred -> m e
-#if MIN_VERSION_template_haskell(2,10,0)
+#if __GLASGOW_HASKELL__ >= 709
 expandPred = expandType
 #else
 expandPred (ClassP className typeParameters) = expandClassP className typeParameters
@@ -61,7 +61,7 @@ expandPred (EqualP type1 type2) = markExpanded <$> (EqualP <$> (runExpanded <$> 
 -- | Expand a list of 'Type' and build an expanded 'ClassP' 'Pred'.
 expandClassP :: forall m e. (DsMonad m, Expanded Pred e)  => Name -> [Type] -> m e
 expandClassP className typeParameters =
-#if MIN_VERSION_template_haskell(2,10,0)
+#if __GLASGOW_HASKELL__ >= 709
       (expandType $ foldl AppT (ConT className) typeParameters) :: m e
 #else
       (markExpanded . ClassP className . map runExpanded) <$> mapM expandType typeParameters
@@ -77,7 +77,7 @@ instance Expanded Type (E Type) where
     markExpanded = E
     runExpanded' (E x) = x
 
-#if !MIN_VERSION_template_haskell(2,10,0)
+#if __GLASGOW_HASKELL__ < 709
 instance Expanded Pred (E Pred) where
     markExpanded = E
     runExpanded' (E x) = x
