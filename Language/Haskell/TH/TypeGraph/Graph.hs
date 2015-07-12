@@ -3,46 +3,57 @@
 -- FIXME: the sense of the predicates are kinda mixed up here
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleInstances, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Language.Haskell.TH.TypeGraph.Graph
-    ( GraphEdges
+    ( TypeGraph, startTypes, typeInfo, edges, graph, gsimple
+    , TypeGraph(..) -- temporary
     , graphFromMap
-    , cut
-    , cutM
-    , isolate
-    , isolateM
-    , dissolve
-    , dissolveM
+
+    , allLensKeys
+    , allPathKeys
+    , makePathLenses
+    , reachableFrom
+    , goalReachableFull
+    , goalReachableSimple
+    , FoldPathControl(..)
+    , foldPath
+
     ) where
 
-#if __GLASGOW_HASKELL__ < 709
-import Control.Applicative ((<$>))
-#endif
-
-import Control.Lens (over, _2)
+import Control.Lens (Lens', makeLenses, view, (%~))
 import Control.Monad (filterM)
+import Control.Monad.Reader (ask, local, MonadReader, ReaderT, runReaderT)
+import Control.Monad.Writer (MonadWriter, tell)
 import Data.Foldable as Foldable
 import Data.Graph hiding (edges)
 import Data.List as List (intercalate, map)
-import Data.Map as Map (Map, elems, filterWithKey, keys, map, mapWithKey, partitionWithKey)
+import Data.Map as Map (keys, Map)
 import qualified Data.Map as Map (toList)
-import Data.Set as Set (Set, delete, empty, filter, member, fromList, union, unions)
-import Language.Haskell.TH (Ppr(ppr))
-import Language.Haskell.TH.PprLib (ptext)
+import Data.Maybe (fromJust, fromMaybe, isJust, mapMaybe)
+import Data.Set as Set (empty, fromList, map, Set)
+import Language.Haskell.TH
+import Language.Haskell.TH.Context.Reify (evalContext, reifyInstancesWithContext)
+import Language.Haskell.TH.Desugar (DsMonad)
+import Language.Haskell.TH.Instances ()
+import Language.Haskell.TH.Path.Core (fieldLensName, SelfPath)
+import Language.Haskell.TH.Path.LensTH (nameMakeLens)
+import Language.Haskell.TH.Path.Order (Order)
+import Language.Haskell.TH.Path.Prune (SinkType)
+import Language.Haskell.TH.Path.View (View(viewLens), viewInstanceType)
+import Language.Haskell.TH.TypeGraph.Edges (GraphEdges)
+import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType, runExpanded)
+import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, vertex)
 import Language.Haskell.TH.TypeGraph.Shape (pprint')
-import Prelude hiding (foldr)
-
-type GraphEdges node key = Map key (node, Set key)
-
-instance Ppr key => Ppr (GraphEdges node key) where
-    ppr x =
-        ptext $ intercalate "\n  " $
-          "edges:" : (List.map
-                       (\(k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ " ->" ++ if null ks then " []" else "") : List.map pprint' (toList ks)))
-                       (Map.toList x))
+import Language.Haskell.TH.TypeGraph.Stack (HasStack(withStack, push), StackElement(StackElement))
+import Language.Haskell.TH.TypeGraph.Vertex (etype, simpleVertex, typeNames, TypeGraphVertex)
+import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or)
 
 -- | Build a graph from the result of typeGraphEdges, each edge goes
 -- from a type to one of the types it contains.  Thus, each edge
@@ -56,49 +67,106 @@ graphFromMap mp =
       triples :: [(node, key, [key])]
       triples = List.map (\ (k, (node, ks)) -> (node, k, toList ks)) $ Map.toList mp
 
--- | Isolate and remove some nodes
-cut :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
-cut victims edges = Map.filterWithKey (\v _ -> not (Set.member v victims)) (isolate victims edges)
+data TypeGraph
+    = TypeGraph
+      { _startTypes :: [Type]
+      , _typeInfo :: TypeGraphInfo
+      , _edges :: GraphEdges () TypeGraphVertex
+      , _graph :: (Graph, Vertex -> ((), TypeGraphVertex, [TypeGraphVertex]), TypeGraphVertex -> Maybe Vertex)
+      , _gsimple :: (Graph, Vertex -> ((), TypeGraphVertex, [TypeGraphVertex]), TypeGraphVertex -> Maybe Vertex)
+      , _stack :: [StackElement] -- this is the only type that isn't available in th-typegraph
+      }
 
--- | Monadic predicate version of 'cut'.
-cutM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
-cutM victim edges = do
-  victims <- Set.fromList <$> filterM victim (Map.keys edges)
-  return $ cut victims edges
+$(makeLenses ''TypeGraph)
 
--- | Remove all the in- and out-edges of some nodes
-isolate :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
-isolate victims edges =
-    edges''
+instance Monad m => HasStack (ReaderT TypeGraph m) where
+    withStack f = ask >>= f . view stack
+    push fld con dec action = local (stack %~ (\s -> StackElement fld con dec : s)) action
+
+-- | A lens key is a pair of vertexes corresponding to a Path instance.
+allLensKeys :: (DsMonad m, MonadReader TypeGraph m) => m (Set (TypeGraphVertex, TypeGraphVertex))
+allLensKeys = do
+  pathKeys <- allPathKeys
+  Set.fromList <$> filterM (uncurry goalReachableSimple) [ (g, k) | g <- toList (Set.map simpleVertex pathKeys), k <- toList (Set.map simpleVertex pathKeys) ]
+
+allPathKeys :: forall m. (DsMonad m, MonadReader TypeGraph m) => m (Set TypeGraphVertex)
+allPathKeys = do
+  -- (g, vf, kf) <- graphFromMap <$> view edges
+  (g, vf, kf) <- view graph
+  kernel <- view startTypes >>= \st -> view typeInfo >>= runReaderT (mapM expandType st >>= mapM (vertex Nothing))
+  let kernel' = mapMaybe kf kernel
+  let keep = Set.fromList $ concatMap (reachable g) kernel'
+      keep' = Set.map (\(_, key, _) -> key) . Set.map vf $ keep
+  return keep'
+
+makePathLenses :: (DsMonad m, MonadReader TypeGraph m, MonadWriter [[Dec]] m) => TypeGraphVertex -> m ()
+makePathLenses key = do
+  simplePath <- (not . null) <$> evalContext (reifyInstancesWithContext ''SinkType [let (E typ) = view etype key in typ])
+  case simplePath of
+    False -> mapM make (toList (typeNames key)) >>= tell
+    _ -> return ()
     where
-      edges' = Map.mapWithKey (\v (h, s) -> (h, if Set.member v victims then Set.empty else s)) edges -- Remove the out-edges
-      edges'' = Map.map (over _2 (Set.filter (not . (`Set.member` victims)))) edges' -- Remove the in-edges
+      make tname = runQ (nameMakeLens tname (\ nameA nameB -> Just (nameBase (fieldLensName nameA nameB))))
 
--- | Monadic predicate version of 'isolate'.
-isolateM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
-isolateM victim edges = do
-  victims <- Set.fromList <$> filterM victim (Map.keys edges)
-  return $ isolate victims edges
+reachableFrom :: forall m. (DsMonad m, MonadReader TypeGraph m) => TypeGraphVertex -> m (Set TypeGraphVertex)
+reachableFrom v = do
+  -- (g, vf, kf) <- graphFromMap <$> view edges
+  (g, vf, kf) <- view graph
+  case kf v of
+    Nothing -> return Set.empty
+    Just v' -> return $ Set.map (\(_, key, _) -> key) . Set.map vf $ Set.fromList $ reachable (transposeG g) v'
 
--- | Remove some nodes and extend each of their in-edges to each of
--- their out-edges
-dissolve :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
-dissolve victims edges0 = foldr dissolve1 edges0 victims
-    where
-      dissolve1 :: (Eq a, Ord a) => a -> GraphEdges node a -> GraphEdges node a
-      dissolve1 victim edges =
-          -- Wherever the victim vertex appears as an out-edge, substitute the vOut set
-          Map.mapWithKey (\k (h, s) -> (h, extend k s)) survivorEdges
-          where
-            -- Extend the out edges of one node through dissolved node v
-            extend k s = if Set.member victim s then Set.union (Set.delete victim s) (Set.delete k vOut) else s
-            -- Get the out-edges of the victim vertex (omitting self edges)
-            vOut = Set.delete victim $ Set.unions $ List.map snd $ Map.elems victimEdges
-            -- Split map into victim vertex and other vertices
-            (victimEdges, survivorEdges) = partitionWithKey (\v _ -> (v == victim)) edges
+isReachable :: (Functor m, DsMonad m, MonadReader TypeGraph m) =>
+               TypeGraphVertex -> TypeGraphVertex -> (Graph, Vertex -> ((), TypeGraphVertex, [TypeGraphVertex]), TypeGraphVertex -> Maybe Vertex) -> m Bool
+isReachable gkey key0 (g, _vf, kf) = do
+  es <- view edges
+  case kf key0 of
+    Nothing -> error ("isReachable - unknown key: " ++ pprint' key0)
+    Just key -> do
+      let gvert = fromMaybe (error $ "Unknown goal type: " ++ pprint' gkey ++ "\n" ++ intercalate "\n  " ("known:" : List.map pprint' (Map.keys es))) (kf gkey)
+      -- Can we reach any node whose type matches (ConT gname)?  Fields don't matter.
+      return $ elem gvert (reachable g key)
 
--- | Monadic predicate version of 'dissolve'.
-dissolveM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
-dissolveM victim edges = do
-  victims <- Set.fromList <$> filterM victim (Map.keys edges)
-  return $ dissolve victims edges
+-- | Can we reach the goal type from the start type in this key?
+goalReachableFull :: (Functor m, DsMonad m, MonadReader TypeGraph m) => TypeGraphVertex -> TypeGraphVertex -> m Bool
+goalReachableFull gkey key0 = view graph >>= isReachable gkey key0
+
+goalReachableSimple :: (Functor m, DsMonad m, MonadReader TypeGraph m) => TypeGraphVertex -> TypeGraphVertex -> m Bool
+goalReachableSimple gkey key0 = view gsimple >>= isReachable (simpleVertex gkey) (simpleVertex key0)
+
+data FoldPathControl m r
+    = FoldPathControl
+      { simplef :: m r
+      , pathyf :: m r
+      , substf :: Exp -> Type -> m r
+      , namedf :: Name -> m r
+      , maybef :: Type -> m r
+      , listf :: Type -> m r
+      , orderf :: Type -> Type -> m r
+      , mapf :: Type -> Type -> m r
+      , pairf :: Type -> Type -> m r
+      , eitherf :: Type -> Type -> m r
+      , otherf :: m r
+      }
+
+foldPath :: (DsMonad m, MonadReader TypeGraph m) => FoldPathControl m r -> TypeGraphVertex -> m r
+foldPath (FoldPathControl{..}) v = do
+  selfPath <- (not . null) <$> evalContext (reifyInstancesWithContext ''SelfPath [let (E typ) = view etype v in typ])
+  simplePath <- (not . null) <$> evalContext (reifyInstancesWithContext ''SinkType [let (E typ) = view etype v in typ])
+  viewType <- evalContext (viewInstanceType (let (E typ) = view etype v in typ))
+  case runExpanded (view etype v) of
+    _ | selfPath -> pathyf
+      | simplePath -> simplef
+    typ
+      | isJust viewType -> do
+          let b = fromJust viewType
+          expr <- runQ [|viewLens :: Lens' $(return typ) $(return b)|]
+          substf expr b
+    ConT tname -> namedf tname
+    AppT (AppT mtyp ityp) etyp | mtyp == ConT ''Order -> orderf ityp etyp
+    AppT ListT etyp -> listf etyp
+    AppT (AppT t3 ktyp) vtyp | t3 == ConT ''Map -> mapf ktyp vtyp
+    AppT (AppT (TupleT 2) ftyp) styp -> pairf ftyp styp
+    AppT t1 vtyp | t1 == ConT ''Maybe -> maybef vtyp
+    AppT (AppT t3 ltyp) rtyp | t3 == ConT ''Either -> eitherf ltyp rtyp
+    _ -> otherf

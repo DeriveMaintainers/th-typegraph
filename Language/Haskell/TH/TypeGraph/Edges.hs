@@ -1,4 +1,4 @@
--- | Operations using @MonadReader (TypeGraphInfo hint)@.
+-- | Operations involving the edges of the graph (before it is a graph.)
 
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -11,17 +11,16 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
-module Language.Haskell.TH.TypeGraph.Monad
-    ( listen_
-    , pass_
-    , fieldVertices
-    , allVertices
-    , vertex
-    , typeVertex
-    , fieldVertex
+module Language.Haskell.TH.TypeGraph.Edges
+    ( GraphEdges
     , typeGraphEdges
+    , cut
+    , cutM
+    , isolate
+    , isolateM
+    , dissolve
+    , dissolveM
     , simpleEdges
-    , simpleVertex
     ) where
 
 #if __GLASGOW_HASKELL__ < 709
@@ -30,57 +29,34 @@ import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
 import Control.Monad.Reader (MonadReader)
-import Control.Monad.Writer (execWriterT, listen, MonadWriter, pass, WriterT)
+import Control.Monad.Writer (execWriterT, WriterT)
 import Data.Default (Default(def))
 import Data.Foldable
 import Data.List as List (map)
-import Data.Map as Map ((!), alter, findWithDefault, map, mapKeysWith, mapWithKey)
-import Data.Monoid (Monoid, (<>))
-import Data.Set as Set (delete, empty, insert, map, Set, singleton, union)
+import Data.Map as Map ((!), alter)
+import Data.Set as Set (empty, insert, Set, singleton)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
-import Language.Haskell.TH.TypeGraph.Graph (GraphEdges)
-import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, fields, infoMap, synonyms, typeSet)
-import Language.Haskell.TH.TypeGraph.Vertex (Field, TypeGraphVertex(..), etype, field)
+import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, infoMap, typeSet, allVertices, vertex)
+import Language.Haskell.TH.TypeGraph.Prelude (pass_)
+import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Prelude hiding (foldr, mapM_, null)
 
-listen_ :: MonadWriter w m => m w
-listen_ = snd <$> listen (return ())
+import Control.Monad (filterM)
+import Data.List as List (intercalate)
+import Data.Map as Map (Map, elems, filterWithKey, keys, map, mapKeysWith, mapWithKey, partitionWithKey)
+import qualified Data.Map as Map (toList)
+import Data.Monoid ((<>))
+import Data.Set as Set (delete, filter, map, member, fromList, union, unions)
+import Language.Haskell.TH.PprLib (ptext)
+import Language.Haskell.TH.TypeGraph.Shape (pprint')
+import Language.Haskell.TH.TypeGraph.Vertex (simpleVertex)
+import Prelude hiding (foldr)
 
-pass_ :: MonadWriter w m => m (w -> w) -> m ()
-pass_ f = pass (((),) <$> f)
-
-allVertices :: (Functor m, DsMonad m, MonadReader TypeGraphInfo m) =>
-               Maybe Field -> E Type -> m (Set TypeGraphVertex)
-allVertices (Just fld) etyp = singleton <$> vertex (Just fld) etyp
-allVertices Nothing etyp = vertex Nothing etyp >>= \v -> fieldVertices v >>= \vs -> return $ Set.insert v vs
-
--- | Build the vertices that involve a particular type - if the field
--- is specified it return s singleton, otherwise it returns a set
--- containing a vertex one for the type on its own, and one for each
--- field containing that type.
-fieldVertices :: MonadReader TypeGraphInfo m => TypeGraphVertex -> m (Set TypeGraphVertex)
-fieldVertices v = do
-  fm <- view fields
-  let fs = Map.findWithDefault Set.empty (view etype v) fm
-  return $ Set.map (\fld' -> set field (Just fld') v) fs
-
--- | Build a vertex from the given 'Type' and optional 'Field'.
-vertex :: forall m. (DsMonad m, MonadReader TypeGraphInfo m) => Maybe Field -> E Type -> m TypeGraphVertex
-vertex fld etyp = maybe (typeVertex etyp) (fieldVertex etyp) fld
-
--- | Build a non-field vertex
-typeVertex :: MonadReader TypeGraphInfo m => E Type -> m TypeGraphVertex
-typeVertex etyp = do
-  sm <- view synonyms
-  return $ TypeGraphVertex {_field = Nothing, _syns = Map.findWithDefault Set.empty etyp sm, _etype = etyp}
-
--- | Build a vertex associated with a field
-fieldVertex :: MonadReader TypeGraphInfo m => E Type -> Field -> m TypeGraphVertex
-fieldVertex etyp fld' = typeVertex etyp >>= \v -> return $ v {_field = Just fld'}
+type GraphEdges node key = Map key (node, Set key)
 
 -- | Given the discovered set of types and maps of type synonyms and
 -- fields, build and return the GraphEdges relation on TypeGraphVertex.
@@ -134,14 +110,70 @@ typeGraphEdges = do
         -- doVertex v2
 
       node :: TypeGraphVertex -> WriterT (GraphEdges node TypeGraphVertex) m ()
-      node v = pass (return ((), (Map.alter (Just . maybe (def, Set.empty) id) v)))
+      -- node v = pass (return ((), (Map.alter (Just . maybe (def, Set.empty) id) v)))
+      node v = pass_ (pure (Map.alter (Just . maybe (def, Set.empty) id) v))
 
       edge :: TypeGraphVertex -> TypeGraphVertex -> WriterT (GraphEdges node TypeGraphVertex) m ()
-      edge v1 v2 = pass (return ((), f)) >> node v2
+      edge v1 v2 = -- trace ("    edge " ++ pprint' v1 ++ " -> " ++ pprint' v2) (return ()) >>
+                   pass_ (pure f) >> node v2
           where f :: GraphEdges node TypeGraphVertex -> GraphEdges node TypeGraphVertex
                 f = Map.alter g v1
                 g :: (Maybe (node, Set TypeGraphVertex) -> Maybe (node, Set TypeGraphVertex))
                 g = Just . maybe (def, singleton v2) (over _2 (Set.insert v2))
+
+instance Ppr key => Ppr (GraphEdges node key) where
+    ppr x =
+        ptext $ intercalate "\n  " $
+          "edges:" : (List.map
+                       (\(k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ " ->" ++ if null ks then " []" else "") : List.map pprint' (toList ks)))
+                       (Map.toList x))
+
+-- | Isolate and remove some nodes
+cut :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
+cut victims edges = Map.filterWithKey (\v _ -> not (Set.member v victims)) (isolate victims edges)
+
+-- | Monadic predicate version of 'cut'.
+cutM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
+cutM victim edges = do
+  victims <- Set.fromList <$> filterM victim (Map.keys edges)
+  return $ cut victims edges
+
+-- | Remove all the in- and out-edges of some nodes
+isolate :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
+isolate victims edges =
+    edges''
+    where
+      edges' = Map.mapWithKey (\v (h, s) -> (h, if Set.member v victims then Set.empty else s)) edges -- Remove the out-edges
+      edges'' = Map.map (over _2 (Set.filter (not . (`Set.member` victims)))) edges' -- Remove the in-edges
+
+-- | Monadic predicate version of 'isolate'.
+isolateM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
+isolateM victim edges = do
+  victims <- Set.fromList <$> filterM victim (Map.keys edges)
+  return $ isolate victims edges
+
+-- | Remove some nodes and extend each of their in-edges to each of
+-- their out-edges
+dissolve :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
+dissolve victims edges0 = foldr dissolve1 edges0 victims
+    where
+      dissolve1 :: (Eq a, Ord a) => a -> GraphEdges node a -> GraphEdges node a
+      dissolve1 victim edges =
+          -- Wherever the victim vertex appears as an out-edge, substitute the vOut set
+          Map.mapWithKey (\k (h, s) -> (h, extend k s)) survivorEdges
+          where
+            -- Extend the out edges of one node through dissolved node v
+            extend k s = if Set.member victim s then Set.union (Set.delete victim s) (Set.delete k vOut) else s
+            -- Get the out-edges of the victim vertex (omitting self edges)
+            vOut = Set.delete victim $ Set.unions $ List.map snd $ Map.elems victimEdges
+            -- Split map into victim vertex and other vertices
+            (victimEdges, survivorEdges) = partitionWithKey (\v _ -> (v == victim)) edges
+
+-- | Monadic predicate version of 'dissolve'.
+dissolveM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
+dissolveM victim edges = do
+  victims <- Set.fromList <$> filterM victim (Map.keys edges)
+  return $ dissolve victims edges
 
 -- | Simplify a graph by throwing away the field information in each
 -- node.  This means the nodes only contain the fully expanded Type
@@ -152,6 +184,3 @@ simpleEdges = Map.mapWithKey (\v (n, s) -> (n, Set.delete v s)) .    -- delete a
               Map.map (over _2 (Set.map simpleVertex)) -- simplify the out edges
     where
       combine (n1, s1) (n2, s2) = (n1 <> n2, Set.union s1 s2)
-
-simpleVertex :: TypeGraphVertex -> TypeGraphVertex
-simpleVertex v = v {_field = Nothing}

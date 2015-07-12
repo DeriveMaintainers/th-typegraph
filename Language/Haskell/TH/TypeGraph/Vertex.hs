@@ -5,6 +5,7 @@ module Language.Haskell.TH.TypeGraph.Vertex
     ( Field
     , TypeGraphVertex(..)
     , field, syns, etype
+    , simpleVertex
     , typeNames
     , bestType
     ) where
@@ -74,6 +75,9 @@ instance Ppr TypeGraphVertex where
                         [ptext ")"])
 
 $(makeLenses ''TypeGraphVertex)
+
+simpleVertex :: TypeGraphVertex -> TypeGraphVertex
+simpleVertex v = v {_field = Nothing}
 
 -- | Return the set of 'Name' of a type's synonyms, plus the name (if
 -- any) used in its data declaration.  Note that this might return the

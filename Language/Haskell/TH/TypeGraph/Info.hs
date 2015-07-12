@@ -10,29 +10,36 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.TH.TypeGraph.Info
-    ( TypeGraphInfo
+    ( -- * Type and builders
+      TypeGraphInfo, fields, infoMap, synonyms, typeSet
     , emptyTypeGraphInfo
     , typeGraphInfo
-    , fields, infoMap, synonyms, typeSet
+    -- * Queries
+    , fieldVertices
+    , allVertices
+    , vertex
+    , typeVertex
+    , fieldVertex
     ) where
 
 #if __GLASGOW_HASKELL__ < 709
 import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
+import Control.Monad.Reader (MonadReader)
 import Control.Monad.State (execStateT, StateT)
 import Data.List as List (intercalate, map)
-import Data.Map as Map (insert, insertWith, Map, toList)
-import Data.Set as Set (insert, member, Set, singleton, toList, union)
+import Data.Map as Map (findWithDefault, insert, insertWith, Map, toList)
+import Data.Set as Set (empty, insert, map, member, Set, singleton, toList, union)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
-import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
-import Language.Haskell.TH.TypeGraph.Shape (pprint')
-import Language.Haskell.TH.TypeGraph.Vertex ()
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax (Lift(lift), Quasi(..))
+import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
+import Language.Haskell.TH.TypeGraph.Shape (pprint')
+import Language.Haskell.TH.TypeGraph.Vertex (Field, TypeGraphVertex(..), etype, field)
 
 -- | Information collected about the graph implied by the structure of
 -- one or more 'Type' values.
@@ -133,3 +140,32 @@ collectTypeInfo typ0 = do
 -- | Build a TypeGraphInfo value by scanning the supplied types
 typeGraphInfo :: forall m. DsMonad m => [Type] -> m TypeGraphInfo
 typeGraphInfo types = flip execStateT emptyTypeGraphInfo $ mapM_ collectTypeInfo types
+
+allVertices :: (Functor m, DsMonad m, MonadReader TypeGraphInfo m) =>
+               Maybe Field -> E Type -> m (Set TypeGraphVertex)
+allVertices (Just fld) etyp = singleton <$> vertex (Just fld) etyp
+allVertices Nothing etyp = vertex Nothing etyp >>= \v -> fieldVertices v >>= \vs -> return $ Set.insert v vs
+
+-- | Build the vertices that involve a particular type - if the field
+-- is specified it return s singleton, otherwise it returns a set
+-- containing a vertex one for the type on its own, and one for each
+-- field containing that type.
+fieldVertices :: MonadReader TypeGraphInfo m => TypeGraphVertex -> m (Set TypeGraphVertex)
+fieldVertices v = do
+  fm <- view fields
+  let fs = Map.findWithDefault Set.empty (view etype v) fm
+  return $ Set.map (\fld' -> set field (Just fld') v) fs
+
+-- | Build a vertex from the given 'Type' and optional 'Field'.
+vertex :: forall m. (DsMonad m, MonadReader TypeGraphInfo m) => Maybe Field -> E Type -> m TypeGraphVertex
+vertex fld etyp = maybe (typeVertex etyp) (fieldVertex etyp) fld
+
+-- | Build a non-field vertex
+typeVertex :: MonadReader TypeGraphInfo m => E Type -> m TypeGraphVertex
+typeVertex etyp = do
+  sm <- view synonyms
+  return $ TypeGraphVertex {_field = Nothing, _syns = Map.findWithDefault Set.empty etyp sm, _etype = etyp}
+
+-- | Build a vertex associated with a field
+fieldVertex :: MonadReader TypeGraphInfo m => E Type -> Field -> m TypeGraphVertex
+fieldVertex etyp fld' = typeVertex etyp >>= \v -> return $ v {_field = Just fld'}
