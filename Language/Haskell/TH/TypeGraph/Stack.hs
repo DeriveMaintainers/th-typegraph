@@ -45,7 +45,7 @@ import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax hiding (lift)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges, typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E))
-import Language.Haskell.TH.TypeGraph.Info (typeGraphInfo)
+import Language.Haskell.TH.TypeGraph.Info (makeTypeInfo)
 import Language.Haskell.TH.TypeGraph.Shape (FieldType(..), fName, fType, constructorFields, constructorName)
 import Language.Haskell.TH.TypeGraph.Vertex (etype, TypeGraphVertex)
 import Prelude hiding ((.))
@@ -166,7 +166,7 @@ fieldLens e@(StackElement fld con _) =
 -- makeLenses should be used.
 makeLenses' :: [Name] -> Q [Dec]
 makeLenses' typeNames =
-    execWriterT $ execStackT $ typeGraphInfo (map ConT typeNames ) >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges () TypeGraphVertex) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
+    execWriterT $ execStackT $ makeTypeInfo (map ConT typeNames ) >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges () TypeGraphVertex) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
     where
       doType (E (ConT name)) = qReify name >>= doInfo
       doType _ = return ()

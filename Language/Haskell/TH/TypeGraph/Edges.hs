@@ -38,7 +38,7 @@ import Data.Set as Set (empty, insert, Set, singleton)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
-import Language.Haskell.TH.TypeGraph.Info (TypeGraphInfo, infoMap, typeSet, allVertices, vertex)
+import Language.Haskell.TH.TypeGraph.Info (TypeInfo, infoMap, typeSet, allVertices, vertex)
 import Language.Haskell.TH.TypeGraph.Prelude (pass_)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
@@ -62,7 +62,7 @@ type GraphEdges node key = Map key (node, Set key)
 -- fields, build and return the GraphEdges relation on TypeGraphVertex.
 -- This is not a recursive function, it stops when it reaches the field
 -- types.
-typeGraphEdges :: forall node m. (DsMonad m, Functor m, Default node, MonadReader TypeGraphInfo m) =>
+typeGraphEdges :: forall node m. (DsMonad m, Functor m, Default node, MonadReader TypeInfo m) =>
                   m (GraphEdges node TypeGraphVertex)
 typeGraphEdges = do
   execWriterT (view typeSet >>= \ts -> mapM_ (\t -> expandType t >>= doType) ts)

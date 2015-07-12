@@ -20,7 +20,7 @@ import Test.Hspec.Core.Spec (SpecM)
 
 import Common
 
-typeGraphInfoOfType =
+typeInfoOfType =
     unlines
 #if MIN_VERSION_template_haskell(2,10,0)
     [ "TypeGraphInfo:",
