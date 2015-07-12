@@ -92,6 +92,7 @@ collectTypeInfo typ0 = do
     where
       doType :: Type -> StateT TypeInfo m ()
       doType typ = do
+        startTypes %= (typ :)
         (s :: Set Type) <- use typeSet
         case Set.member typ s of
           True -> return ()
