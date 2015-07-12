@@ -12,7 +12,6 @@
 module Language.Haskell.TH.TypeGraph.Info
     ( -- * Type and builders
       TypeInfo, startTypes, fields, infoMap, synonyms, typeSet
-    , emptyTypeInfo
     , makeTypeInfo
     -- * Update
     , vertex
@@ -142,7 +141,7 @@ collectTypeInfo typ0 = do
 
 -- | Build a TypeInfo value by scanning the supplied types
 makeTypeInfo :: forall m. DsMonad m => [Type] -> m TypeInfo
-makeTypeInfo types = flip execStateT emptyTypeInfo $ mapM_ collectTypeInfo types
+makeTypeInfo types = execStateT (mapM_ collectTypeInfo types) emptyTypeInfo
 
 allVertices :: (Functor m, DsMonad m, MonadReader TypeInfo m) =>
                Maybe Field -> E Type -> m (Set TypeGraphVertex)

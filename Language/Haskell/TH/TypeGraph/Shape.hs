@@ -17,7 +17,6 @@ module Language.Haskell.TH.TypeGraph.Shape
     , foldShape
     ) where
 
-import Control.Applicative ((<$>), (<*>))
 import Data.Generics (Data)
 import Data.Typeable (Typeable)
 import Language.Haskell.Exts.Syntax ()

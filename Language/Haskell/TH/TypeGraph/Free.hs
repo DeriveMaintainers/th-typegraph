@@ -4,7 +4,6 @@ module Language.Haskell.TH.TypeGraph.Free
     , typeArity
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Lens hiding (Strict, cons)
 import Control.Monad.State (MonadState, execStateT)
 import Data.Set as Set (Set, delete, difference, empty, fromList, insert, member)
