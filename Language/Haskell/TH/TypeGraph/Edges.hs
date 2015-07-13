@@ -16,6 +16,7 @@ module Language.Haskell.TH.TypeGraph.Edges
     , typeGraphEdges
     , cut
     , cutM
+    , cutEdges
     , isolate
     , isolateM
     , dissolve
@@ -29,7 +30,7 @@ import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
 import Control.Monad.Reader (MonadReader)
-import Control.Monad.Writer (execWriterT, WriterT)
+import Control.Monad.State (execStateT, modify, StateT)
 import Data.Default (Default(def))
 import Data.Foldable
 import Data.List as List (map)
@@ -39,7 +40,6 @@ import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Info (TypeInfo, infoMap, typeSet, allVertices, vertex)
-import Language.Haskell.TH.TypeGraph.Prelude (pass_)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
@@ -65,9 +65,9 @@ type GraphEdges node key = Map key (node, Set key)
 typeGraphEdges :: forall node m. (DsMonad m, Functor m, Default node, MonadReader TypeInfo m) =>
                   m (GraphEdges node TypeGraphVertex)
 typeGraphEdges = do
-  execWriterT (view typeSet >>= \ts -> mapM_ (\t -> expandType t >>= doType) ts)
+  execStateT (view typeSet >>= mapM_ (\t -> expandType t >>= doType)) mempty
     where
-      doType :: E Type -> WriterT (GraphEdges node TypeGraphVertex) m ()
+      doType :: E Type -> StateT (GraphEdges node TypeGraphVertex) m ()
       doType typ = do
         vs <- allVertices Nothing typ
         mapM_ node vs
@@ -82,25 +82,25 @@ typeGraphEdges = do
             doType (E typ2)
           _ -> return ()
 
-      doInfo :: Set TypeGraphVertex -> Info -> WriterT (GraphEdges node TypeGraphVertex) m ()
+      doInfo :: Set TypeGraphVertex -> Info -> StateT (GraphEdges node TypeGraphVertex) m ()
       doInfo vs (TyConI dec) = doDec vs dec
       -- doInfo vs (PrimTyConI tname _ _) = return ()
       doInfo _ _ = return ()
 
-      doDec :: Set TypeGraphVertex -> Dec -> WriterT (GraphEdges node TypeGraphVertex) m ()
+      doDec :: Set TypeGraphVertex -> Dec -> StateT (GraphEdges node TypeGraphVertex) m ()
       doDec _ (TySynD _ _ _) = return () -- This type will be in typeSet
       doDec vs (NewtypeD _ tname _ constr _) = doCon vs tname constr
       doDec vs (DataD _ tname _ constrs _) = mapM_ (doCon vs tname) constrs
       doDec _ _ = return ()
 
-      doCon :: Set TypeGraphVertex -> Name -> Con -> WriterT (GraphEdges node TypeGraphVertex) m ()
+      doCon :: Set TypeGraphVertex -> Name -> Con -> StateT (GraphEdges node TypeGraphVertex) m ()
       doCon vs tname (ForallC _ _ con) = doCon vs tname con
       doCon vs tname (NormalC cname flds) = mapM_ (uncurry (doField vs tname cname)) (List.map (\ (n, (_, ftype)) -> (Left n, ftype)) (zip [1..] flds))
       doCon vs tname (RecC cname flds) = mapM_ (uncurry (doField vs tname cname)) (List.map (\ (fname, _, ftype) -> (Right fname, ftype)) flds)
       doCon vs tname (InfixC (_, lhs) cname (_, rhs)) = doField vs tname cname (Left 1) lhs >> doField vs tname cname (Left 2) rhs
 
       -- Connect the vertex for this record type to one particular field vertex
-      doField ::  DsMonad m => Set TypeGraphVertex -> Name -> Name -> Either Int Name -> Type -> WriterT (GraphEdges node TypeGraphVertex) m ()
+      doField ::  DsMonad m => Set TypeGraphVertex -> Name -> Name -> Either Int Name -> Type -> StateT (GraphEdges node TypeGraphVertex) m ()
       doField vs tname cname fld ftyp = do
         v2 <- expandType ftyp >>= vertex (Just (tname, cname, fld))
         v3 <- expandType ftyp >>= vertex Nothing
@@ -109,13 +109,12 @@ typeGraphEdges = do
         -- Here's where we don't recurse, see?
         -- doVertex v2
 
-      node :: TypeGraphVertex -> WriterT (GraphEdges node TypeGraphVertex) m ()
+      node :: TypeGraphVertex -> StateT (GraphEdges node TypeGraphVertex) m ()
       -- node v = pass (return ((), (Map.alter (Just . maybe (def, Set.empty) id) v)))
-      node v = pass_ (pure (Map.alter (Just . maybe (def, Set.empty) id) v))
+      node v = modify (Map.alter (Just . maybe (def, Set.empty) id) v)
 
-      edge :: TypeGraphVertex -> TypeGraphVertex -> WriterT (GraphEdges node TypeGraphVertex) m ()
-      edge v1 v2 = -- trace ("    edge " ++ pprint' v1 ++ " -> " ++ pprint' v2) (return ()) >>
-                   pass_ (pure f) >> node v2
+      edge :: TypeGraphVertex -> TypeGraphVertex -> StateT (GraphEdges node TypeGraphVertex) m ()
+      edge v1 v2 = node v2 >> modify f
           where f :: GraphEdges node TypeGraphVertex -> GraphEdges node TypeGraphVertex
                 f = Map.alter g v1
                 g :: (Maybe (node, Set TypeGraphVertex) -> Maybe (node, Set TypeGraphVertex))
@@ -138,13 +137,18 @@ cutM victim edges = do
   victims <- Set.fromList <$> filterM victim (Map.keys edges)
   return $ cut victims edges
 
+cutEdges :: (Eq a, Ord a) => (a -> a -> Bool) -> GraphEdges node a -> (GraphEdges node a)
+cutEdges p edges = Map.mapWithKey (\key (hint, gkeys) -> (hint, Set.filter (\gkey -> p key gkey) gkeys)) edges
+
 -- | Remove all the in- and out-edges of some nodes
 isolate :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
-isolate victims edges =
+isolate victims edges = cutEdges (\ a b -> Set.member a victims || Set.member b victims) edges
+#if 0
     edges''
     where
       edges' = Map.mapWithKey (\v (h, s) -> (h, if Set.member v victims then Set.empty else s)) edges -- Remove the out-edges
       edges'' = Map.map (over _2 (Set.filter (not . (`Set.member` victims)))) edges' -- Remove the in-edges
+#endif
 
 -- | Monadic predicate version of 'isolate'.
 isolateM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)

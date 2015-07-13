@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 module Language.Haskell.TH.TypeGraph.Prelude
-    ( listen_
-    , pass_
+    ( {- listen_
+    , pass_ -}
     ) where
 
 import Control.Monad.Writer (listen, MonadWriter, pass)
