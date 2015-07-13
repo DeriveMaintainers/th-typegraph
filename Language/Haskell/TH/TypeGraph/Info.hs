@@ -73,16 +73,14 @@ instance Ppr TypeInfo where
 $(makeLenses ''TypeInfo)
 
 instance Lift TypeInfo where
-    lift (TypeInfo {_typeSet = t, _infoMap = i, _expanded = e, _synonyms = s, _fields = f}) =
-        [| TypeInfo { _typeSet = $(lift t)
-                         , _infoMap = $(lift i)
-                         , _expanded = $(lift e)
-                         , _synonyms = $(lift s)
-                         , _fields = $(lift f)
-                         } |]
-
-emptyTypeInfo :: TypeInfo
-emptyTypeInfo = TypeInfo {_startTypes = mempty, _typeSet = mempty, _infoMap = mempty, _expanded = mempty, _synonyms = mempty, _fields = mempty}
+    lift (TypeInfo {_startTypes = st, _typeSet = t, _infoMap = i, _expanded = e, _synonyms = s, _fields = f}) =
+        [| TypeInfo { _startTypes = $(lift st)
+                    , _typeSet = $(lift t)
+                    , _infoMap = $(lift i)
+                    , _expanded = $(lift e)
+                    , _synonyms = $(lift s)
+                    , _fields = $(lift f)
+                    } |]
 
 -- | Collect the graph information for one type and all the types
 -- reachable from it.
@@ -92,7 +90,6 @@ collectTypeInfo typ0 = do
     where
       doType :: Type -> StateT TypeInfo m ()
       doType typ = do
-        startTypes %= (typ :)
         (s :: Set Type) <- use typeSet
         case Set.member typ s of
           True -> return ()
@@ -142,7 +139,15 @@ collectTypeInfo typ0 = do
 
 -- | Build a TypeInfo value by scanning the supplied types
 makeTypeInfo :: forall m. DsMonad m => [Type] -> m TypeInfo
-makeTypeInfo types = execStateT (mapM_ collectTypeInfo types) emptyTypeInfo
+makeTypeInfo types =
+    execStateT
+      (mapM_ collectTypeInfo types)
+      (TypeInfo { _startTypes = types
+                , _typeSet = mempty
+                , _infoMap = mempty
+                , _expanded = mempty
+                , _synonyms = mempty
+                , _fields = mempty})
 
 allVertices :: (Functor m, DsMonad m, MonadReader TypeInfo m) =>
                Maybe Field -> E Type -> m (Set TypeGraphVertex)
