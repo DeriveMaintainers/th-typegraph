@@ -166,8 +166,10 @@ fieldLens e@(StackElement fld con _) =
 -- makeLenses should be used.
 makeLenses' :: [Name] -> Q [Dec]
 makeLenses' typeNames =
-    execWriterT $ execStackT $ makeTypeInfo (map ConT typeNames ) >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges () TypeGraphVertex) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
+    execWriterT $ execStackT $ makeTypeInfo st >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges () TypeGraphVertex) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
     where
+      st = map ConT typeNames
+
       doType (E (ConT name)) = qReify name >>= doInfo
       doType _ = return ()
       doInfo (TyConI dec@(NewtypeD _ typeName _ con _)) = doCons dec typeName [con]

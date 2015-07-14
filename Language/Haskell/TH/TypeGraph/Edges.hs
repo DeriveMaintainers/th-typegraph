@@ -19,6 +19,8 @@ module Language.Haskell.TH.TypeGraph.Edges
     , cutEdges
     , isolate
     , isolateM
+    , link
+    , linkM
     , dissolve
     , dissolveM
     , simpleEdges
@@ -29,32 +31,27 @@ import Control.Applicative ((<$>))
 import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
+import Control.Monad (filterM)
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.State (execStateT, modify, StateT)
 import Data.Default (Default(def))
 import Data.Foldable
-import Data.List as List (map)
-import Data.Map as Map ((!), alter)
-import Data.Set as Set (empty, insert, Set, singleton)
+import Data.List as List (filter, intercalate, map)
+import Data.Map as Map ((!), alter, delete, filterWithKey, fromList, keys, lookup, map, Map, mapKeysWith, mapWithKey)
+import qualified Data.Map as Map (toList)
+import Data.Maybe (mapMaybe)
+import Data.Monoid ((<>))
+import Data.Set as Set (delete, empty, filter, insert, map, member, fromList, Set, singleton, union)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
+import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Info (TypeInfo, infoMap, typeSet, allVertices, vertex)
-import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex)
+import Language.Haskell.TH.TypeGraph.Shape (pprint')
+import Language.Haskell.TH.TypeGraph.Vertex (simpleVertex, TypeGraphVertex)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Prelude hiding (foldr, mapM_, null)
-
-import Control.Monad (filterM)
-import Data.List as List (intercalate)
-import Data.Map as Map (Map, elems, filterWithKey, keys, map, mapKeysWith, mapWithKey, partitionWithKey)
-import qualified Data.Map as Map (toList)
-import Data.Monoid ((<>))
-import Data.Set as Set (delete, filter, map, member, fromList, union, unions)
-import Language.Haskell.TH.PprLib (ptext)
-import Language.Haskell.TH.TypeGraph.Shape (pprint')
-import Language.Haskell.TH.TypeGraph.Vertex (simpleVertex)
-import Prelude hiding (foldr)
 
 type GraphEdges node key = Map key (node, Set key)
 
@@ -150,28 +147,39 @@ isolateM victim edges = do
   victims <- Set.fromList <$> filterM victim (Map.keys edges)
   return $ isolate (flip Set.member victims) edges
 
--- | Remove some nodes and extend each of their in-edges to each of
--- their out-edges
-dissolve :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
-dissolve victims edges0 = foldr dissolve1 edges0 victims
+-- | Replace the out set of selected nodes
+link :: (Eq a, Ord a) => (a -> Maybe (Set a)) -> GraphEdges node a -> GraphEdges node a
+link f edges =
+    foldr link1 edges (List.map (\a -> (a, f a)) (Map.keys edges))
     where
-      dissolve1 :: (Eq a, Ord a) => a -> GraphEdges node a -> GraphEdges node a
-      dissolve1 victim edges =
-          -- Wherever the victim vertex appears as an out-edge, substitute the vOut set
-          Map.mapWithKey (\k (h, s) -> (h, extend k s)) survivorEdges
-          where
-            -- Extend the out edges of one node through dissolved node v
-            extend k s = if Set.member victim s then Set.union (Set.delete victim s) (Set.delete k vOut) else s
-            -- Get the out-edges of the victim vertex (omitting self edges)
-            vOut = Set.delete victim $ Set.unions $ List.map snd $ Map.elems victimEdges
-            -- Split map into victim vertex and other vertices
-            (victimEdges, survivorEdges) = partitionWithKey (\v _ -> (v == victim)) edges
+      link1 :: (Eq a, Ord a) => (a, Maybe (Set a)) -> GraphEdges node a -> GraphEdges node a
+      link1 (_, Nothing) edges' = edges'
+      link1 (a, Just s) edges' = Map.alter (\(Just (node, _)) -> Just (node, s)) a edges'
+
+linkM :: (Eq a, Ord a, Monad m) => (a -> m (Maybe (Set a))) -> GraphEdges node a -> m (GraphEdges node a)
+linkM f edges = do
+  let ks = Map.keys edges
+  mss <- mapM f ks
+  let mp = Map.fromList $ mapMaybe (\(k, ms) -> maybe Nothing (Just .(k,)) ms) $ zip ks mss
+  return $ link (\k -> Map.lookup k mp) edges
+
+-- | Remove matching nodes and extend each of their in-edges to each of
+-- their out-edges.
+dissolve :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges node a -> GraphEdges node a
+dissolve p edges =
+    foldr dissolve1 edges (List.filter p (Map.keys edges))
+    where
+      -- Remove a victim and call dissolve1' to extend the edges of each
+      -- node that had it in its out set.
+      dissolve1 v es = maybe es (\(_, s) -> dissolve1' v (Set.delete v s) (Map.delete v es)) (Map.lookup v es)
+      -- If a node's out edges include the victim replace them with next.
+      dissolve1' v vs es = Map.map (\(h, s) -> (h, if Set.member v s then Set.union vs (Set.delete v s) else s)) es
 
 -- | Monadic predicate version of 'dissolve'.
 dissolveM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
 dissolveM victim edges = do
   victims <- Set.fromList <$> filterM victim (Map.keys edges)
-  return $ dissolve victims edges
+  return $ dissolve (flip Set.member victims) edges
 
 -- | Simplify a graph by throwing away the field information in each
 -- node.  This means the nodes only contain the fully expanded Type

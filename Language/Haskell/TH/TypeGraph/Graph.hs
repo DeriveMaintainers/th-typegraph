@@ -45,11 +45,10 @@ import Control.Monad.Trans (lift)
 import Data.Default (Default(def))
 import Data.Foldable as Foldable
 import Data.Graph hiding (edges)
-import Data.List as List (intercalate, map)
+import Data.List as List (map)
 import Data.Map as Map (alter, update)
-import Data.Map as Map (keys)
 import qualified Data.Map as Map (toList)
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (fromJust, mapMaybe)
 import Data.Set as Set (map)
 import Data.Set as Set (empty, fromList, insert, member, Set, singleton, toList, unions)
 import Language.Haskell.Exts.Syntax ()
@@ -62,7 +61,6 @@ import Language.Haskell.TH.Syntax (Quasi(..))
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Info (startTypes, TypeInfo, vertex)
-import Language.Haskell.TH.TypeGraph.Shape (pprint')
 import Language.Haskell.TH.TypeGraph.Stack (HasStack(withStack, push), StackElement(StackElement))
 import Language.Haskell.TH.TypeGraph.Vertex (simpleVertex, TypeGraphVertex, etype)
 import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or)
@@ -101,7 +99,8 @@ instance Monad m => HasStack (ReaderT TypeGraph m) where
 allLensKeys :: (DsMonad m, MonadReader TypeGraph m) => m (Set (TypeGraphVertex, TypeGraphVertex))
 allLensKeys = do
   pathKeys <- allPathKeys
-  Set.fromList <$> filterM (uncurry goalReachableSimple) [ (g, k) | g <- Foldable.toList (Set.map simpleVertex pathKeys), k <- Foldable.toList (Set.map simpleVertex pathKeys) ]
+  Set.fromList <$> filterM (uncurry goalReachableSimple) [ (g, k) | g <- Foldable.toList (Set.map simpleVertex pathKeys),
+                                                                    k <- Foldable.toList (Set.map simpleVertex pathKeys) ]
 
 allPathKeys :: forall m. (DsMonad m, MonadReader TypeGraph m) => m (Set TypeGraphVertex)
 allPathKeys = do
@@ -121,23 +120,28 @@ reachableFrom v = do
     Nothing -> return Set.empty
     Just v' -> return $ Set.map (\(_, key, _) -> key) . Set.map vf $ Set.fromList $ reachable (transposeG g) v'
 
-isReachable :: (Functor m, DsMonad m, MonadReader TypeGraph m) =>
-               TypeGraphVertex -> TypeGraphVertex -> (Graph, Vertex -> ((), TypeGraphVertex, [TypeGraphVertex]), TypeGraphVertex -> Maybe Vertex) -> m Bool
-isReachable gkey key0 (g, _vf, kf) = do
+-- | Can we reach the goal type from the start type in this key?
+goalReachableFull :: (Functor m, DsMonad m, MonadReader TypeGraph m) => TypeGraphVertex -> TypeGraphVertex -> m Bool
+goalReachableFull gkey key0 = isReachable gkey key0 <$> view graph
+
+goalReachableSimple :: (Functor m, DsMonad m, MonadReader TypeGraph m) => TypeGraphVertex -> TypeGraphVertex -> m Bool
+goalReachableSimple gkey key0 = isReachable (simpleVertex gkey) (simpleVertex key0) <$> view gsimple
+
+isReachable :: TypeGraphVertex -> TypeGraphVertex -> (Graph, Vertex -> ((), TypeGraphVertex, [TypeGraphVertex]), TypeGraphVertex -> Maybe Vertex) -> Bool
+isReachable gkey key0 (g, _vf, kf) = path g (fromJust $ kf key0) (fromJust $ kf gkey)
+
+#if 0
   es <- view edges
+  let Just v0 = 
+      Just vf = 
+  return $ 
   case kf key0 of
     Nothing -> error ("isReachable - unknown key: " ++ pprint' key0)
     Just key -> do
       let gvert = fromMaybe (error $ "Unknown goal type: " ++ pprint' gkey ++ "\n" ++ intercalate "\n  " ("known:" : List.map pprint' (Map.keys es))) (kf gkey)
       -- Can we reach any node whose type matches (ConT gname)?  Fields don't matter.
-      return $ elem gvert (reachable g key)
-
--- | Can we reach the goal type from the start type in this key?
-goalReachableFull :: (Functor m, DsMonad m, MonadReader TypeGraph m) => TypeGraphVertex -> TypeGraphVertex -> m Bool
-goalReachableFull gkey key0 = view graph >>= isReachable gkey key0
-
-goalReachableSimple :: (Functor m, DsMonad m, MonadReader TypeGraph m) => TypeGraphVertex -> TypeGraphVertex -> m Bool
-goalReachableSimple gkey key0 = view gsimple >>= isReachable (simpleVertex gkey) (simpleVertex key0)
+      return $ path g key gvert
+#endif
 
 -- | Return the TypeGraphVertex associated with a particular type,
 -- with no field specified.
