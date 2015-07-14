@@ -127,34 +127,28 @@ instance Ppr key => Ppr (GraphEdges node key) where
                        (\(k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ " ->" ++ if null ks then " []" else "") : List.map pprint' (toList ks)))
                        (Map.toList x))
 
--- | Isolate and remove some nodes
-cut :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
-cut victims edges = Map.filterWithKey (\v _ -> not (Set.member v victims)) (isolate victims edges)
+-- | Isolate and remove matching nodes
+cut :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges node a -> GraphEdges node a
+cut p edges = Map.filterWithKey (\v _ -> not (p v)) (isolate p edges)
 
 -- | Monadic predicate version of 'cut'.
 cutM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
 cutM victim edges = do
   victims <- Set.fromList <$> filterM victim (Map.keys edges)
-  return $ cut victims edges
+  return $ cut (flip Set.member victims) edges
 
 cutEdges :: (Eq a, Ord a) => (a -> a -> Bool) -> GraphEdges node a -> (GraphEdges node a)
-cutEdges p edges = Map.mapWithKey (\key (hint, gkeys) -> (hint, Set.filter (\gkey -> p key gkey) gkeys)) edges
+cutEdges p edges = Map.mapWithKey (\key (hint, gkeys) -> (hint, Set.filter (\gkey -> not (p key gkey)) gkeys)) edges
 
--- | Remove all the in- and out-edges of some nodes
-isolate :: (Eq a, Ord a) => Set a -> GraphEdges node a -> GraphEdges node a
-isolate victims edges = cutEdges (\ a b -> Set.member a victims || Set.member b victims) edges
-#if 0
-    edges''
-    where
-      edges' = Map.mapWithKey (\v (h, s) -> (h, if Set.member v victims then Set.empty else s)) edges -- Remove the out-edges
-      edges'' = Map.map (over _2 (Set.filter (not . (`Set.member` victims)))) edges' -- Remove the in-edges
-#endif
+-- | Remove all the in- and out-edges of matching nodes
+isolate :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges node a -> GraphEdges node a
+isolate p edges = cutEdges (\ a b -> p a || p b) edges
 
 -- | Monadic predicate version of 'isolate'.
 isolateM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
 isolateM victim edges = do
   victims <- Set.fromList <$> filterM victim (Map.keys edges)
-  return $ isolate victims edges
+  return $ isolate (flip Set.member victims) edges
 
 -- | Remove some nodes and extend each of their in-edges to each of
 -- their out-edges
