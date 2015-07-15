@@ -38,8 +38,9 @@ import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax (Lift(lift), Quasi(..))
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
-import Language.Haskell.TH.TypeGraph.Shape (pprint')
-import Language.Haskell.TH.TypeGraph.Vertex (Field, TypeGraphVertex(..), etype, field)
+import Language.Haskell.TH.TypeGraph.Prelude (pprint')
+import Language.Haskell.TH.TypeGraph.Shape (Field)
+import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field)
 
 -- | Information collected about the graph implied by the structure of
 -- one or more 'Type' values.

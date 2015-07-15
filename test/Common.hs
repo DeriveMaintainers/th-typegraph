@@ -13,10 +13,11 @@ import Language.Haskell.TH
 import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E, markExpanded, runExpanded)
-import Language.Haskell.TH.TypeGraph.Info (TypeInfo, typeInfo)
+import Language.Haskell.TH.TypeGraph.Info (TypeInfo)
 import Language.Haskell.TH.TypeGraph.Edges (typeGraphEdges)
-import Language.Haskell.TH.TypeGraph.Shape (pprint')
-import Language.Haskell.TH.TypeGraph.Vertex (Field, TypeGraphVertex(..))
+import Language.Haskell.TH.TypeGraph.Prelude (pprint')
+import Language.Haskell.TH.TypeGraph.Shape (Field)
+import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
 
 import Language.Haskell.TH.Syntax (Lift(lift))
 
@@ -52,9 +53,6 @@ pprintPred = pprint' . unReify . runExpanded
 
 edgesToStrings :: GraphEdges label TypeGraphVertex -> [(String, [String])]
 edgesToStrings mp = List.map (\ (t, (_, s)) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
-
-typeInfo' :: DsMonad m => [Type] -> m TypeInfo
-typeInfo' = typeInfo
 
 typeGraphEdges' :: forall m. (DsMonad m, MonadReader TypeInfo m) => m (GraphEdges () TypeGraphVertex)
 typeGraphEdges' = typeGraphEdges

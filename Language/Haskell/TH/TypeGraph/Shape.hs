@@ -1,15 +1,15 @@
 -- | A fold on the shape of a record.
-{-# LANGUAGE CPP, DeriveDataTypeable #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 module Language.Haskell.TH.TypeGraph.Shape
-    ( pprint'
-    , unlifted
-    -- * Deconstructors
-    , constructorName
-    , constructorFields
-    , declarationName
-    , declarationType
+    ( 
     -- * Field name and position
+      Field
+    , constructorFields
     , FieldType(..)
+    , constructorFieldTypes
     , fPos
     , fName
     , fType
@@ -24,45 +24,34 @@ import Language.Haskell.TH
 import Language.Haskell.TH.Desugar ({- instances -})
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax
-
-instance Ppr () where
-    ppr () = ptext "()"
-
--- | Pretty print a 'Ppr' value on a single line with each block of
--- white space (newlines, tabs, etc.) converted to a single space.
-pprint' :: Ppr a => a -> [Char]
-pprint' typ = unwords $ words $ pprint typ
-
--- | Does the type or the declaration to which it refers contain a
--- primitive (aka unlifted) type?  This will traverse down any 'Dec'
--- to the named types, and then check whether any of their 'Info'
--- records are 'PrimTyConI' values.
-class IsUnlifted t where
-    unlifted :: Quasi m => t -> m Bool
-
-instance IsUnlifted Dec where
-    unlifted (DataD _ _ _ cons _) = or <$> mapM unlifted cons
-    unlifted (NewtypeD _ _ _ con _) = unlifted con
-    unlifted (TySynD _ _ typ) = unlifted typ
-    unlifted _ = return False
-
-instance IsUnlifted Con where
-    unlifted (ForallC _ _ con) = unlifted con
-    unlifted (NormalC _ ts) = or <$> mapM (unlifted . snd) ts
-    unlifted (RecC _ ts) = or <$> mapM (\ (_, _, t) -> unlifted t) ts
-    unlifted (InfixC t1 _ t2) = or <$> mapM (unlifted . snd) [t1, t2]
-
-instance IsUnlifted Type where
-    unlifted (ForallT _ _ typ) = unlifted typ
-    unlifted (ConT name) = qReify name >>= unlifted
-    unlifted (AppT t1 t2) = (||) <$> unlifted t1 <*> unlifted t2
-    unlifted _ = return False
-
-instance IsUnlifted Info where
-    unlifted (PrimTyConI _ _ _) = return True
-    unlifted _ = return False -- traversal stops here
+import Language.Haskell.TH.TypeGraph.Prelude (unReifyName)
+import Language.Haskell.TH.TypeGraph.Expand (E)
 
 -- FieldType and Field should be merged, or made less rudundant.
+
+type Field = ( Name, -- type name
+               Name, -- constructor name
+               Either Int -- field position
+                      Name -- field name
+             )
+
+constructorFields :: Name -> Con -> [Field]
+constructorFields tname (ForallC _ _ con) = constructorFields tname con
+constructorFields tname (NormalC cname fields) = map (\(i, _) -> (tname, cname, Left i)) (zip ([1..] :: [Int]) fields)
+constructorFields tname (RecC cname fields) = map (\ (fname, _, _typ) -> (tname, cname, Right fname)) fields
+constructorFields tname (InfixC (_, _lhs) cname (_, _rhs)) = [(tname, cname, Left 1), (tname, cname, Left 2)]
+
+instance Ppr Field where
+    ppr (tname, cname, field) = ptext $
+        "field " ++
+        show (unReifyName tname) ++ "." ++
+        either (\ n -> show (unReifyName cname) ++ "[" ++ show n ++ "]") (\ f -> show (unReifyName f)) field
+
+instance Ppr (Maybe Field, E Type) where
+    ppr (mf, typ) = ptext $ pprint typ ++ maybe "" (\fld -> " (field " ++ pprint fld ++ ")") mf
+
+instance Ppr (Maybe Field, Type) where
+    ppr (mf, typ) = ptext $ pprint typ ++ " (unexpanded)" ++ maybe "" (\fld -> " (field " ++ pprint fld ++ ")") mf
 
 data FieldType = Positional Int StrictType | Named VarStrictType deriving (Eq, Ord, Show, Data, Typeable)
 
@@ -92,7 +81,7 @@ foldShape :: Monad m =>
           -> (Con -> FieldType -> m r)     -- wrapperFn - one constructor of arity one
           -> [Con] -> m r
 foldShape dataFn recordFn enumFn wrapperFn cons =
-    case zip cons (map constructorFields cons) :: [(Con, [FieldType])] of
+    case zip cons (map constructorFieldTypes cons) :: [(Con, [FieldType])] of
       [(con, [fld])] ->
           wrapperFn con fld
       [(con, flds)] ->
@@ -102,40 +91,8 @@ foldShape dataFn recordFn enumFn wrapperFn cons =
       pairs ->
           dataFn pairs
 
-constructorName :: Con -> Name
-constructorName (ForallC _ _ con) = constructorName con
-constructorName (NormalC name _) = name
-constructorName (RecC name _) = name
-constructorName (InfixC _ name _) = name
-
-constructorFields :: Con -> [FieldType]
-constructorFields (ForallC _ _ con) = constructorFields con
-constructorFields (NormalC _ ts) = map (uncurry Positional) (zip [1..] ts)
-constructorFields (RecC _ ts) = map Named ts
-constructorFields (InfixC t1 _ t2) = [Positional 1 t1, Positional 2 t2]
-
-declarationName :: Dec -> Maybe Name
-declarationName (FunD name _) = Just name
-declarationName (ValD _pat _body _decs) = Nothing
-declarationName (DataD _ name _ _ _) = Just name
-declarationName (NewtypeD _ name _ _ _) = Just name
-declarationName (TySynD name _ _) = Just name
-declarationName (ClassD _ name _ _ _) = Just name
-declarationName (InstanceD _ _ _) = Nothing
-declarationName (SigD name _) = Just name
-declarationName (ForeignD _) = Nothing
-declarationName (InfixD _ name) = Just name
-declarationName (PragmaD _) = Nothing
-declarationName (FamilyD _ _name _ _) = Nothing
-declarationName (DataInstD _ name _ _ _) = Just name
-declarationName (NewtypeInstD _ name _ _ _) = Just name
-declarationName (TySynInstD name _) = Just name
-declarationName (ClosedTypeFamilyD name _ _ _) = Just name
-declarationName (RoleAnnotD name _) = Just name
-#if __GLASGOW_HASKELL__ >= 709
-declarationName (StandaloneDerivD _ _) = Nothing
-declarationName (DefaultSigD name _) = Just name
-#endif
-
-declarationType :: Dec -> Maybe Type
-declarationType = fmap ConT . declarationName
+constructorFieldTypes :: Con -> [FieldType]
+constructorFieldTypes (ForallC _ _ con) = constructorFieldTypes con
+constructorFieldTypes (NormalC _ ts) = map (uncurry Positional) (zip [1..] ts)
+constructorFieldTypes (RecC _ ts) = map Named ts
+constructorFieldTypes (InfixC t1 _ t2) = [Positional 1 t1, Positional 2 t2]

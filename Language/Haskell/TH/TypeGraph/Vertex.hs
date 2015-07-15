@@ -2,8 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 module Language.Haskell.TH.TypeGraph.Vertex
-    ( Field
-    , TypeGraphVertex(..)
+    ( TypeGraphVertex(..)
     , field, syns, etype
     , simpleVertex
     , typeNames
@@ -11,49 +10,19 @@ module Language.Haskell.TH.TypeGraph.Vertex
     ) where
 
 import Control.Lens -- (makeLenses, view)
-import Data.Generics (Data, everywhere, mkT)
 import Data.List as List (concatMap, intersperse)
-import Data.Map as Map (Map, fromList, toList)
-import Data.Set as Set (fromList, insert, minView, Set, toList)
+import Data.Set as Set (insert, minView, Set, toList)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (hcat, ptext)
 import Language.Haskell.TH.Syntax (Lift(lift))
 import Language.Haskell.TH.TypeGraph.Expand (E(E), markExpanded, runExpanded)
-
-instance Lift a => Lift (Set a) where
-    lift s = [|Set.fromList $(lift (Set.toList s))|]
-
-instance (Lift a, Lift b) => Lift (Map a b) where
-    lift mp = [|Map.fromList $(lift (Map.toList mp))|]
+import Language.Haskell.TH.TypeGraph.Prelude (unReify, unReifyName)
+import Language.Haskell.TH.TypeGraph.Shape (Field)
 
 instance Lift (E Type) where
     lift etype = [|markExpanded $(lift (runExpanded etype))|]
-
-unReify :: Data a => a -> a
-unReify = everywhere (mkT unReifyName)
-
-unReifyName :: Name -> Name
-unReifyName = mkName . nameBase
-
-type Field = ( Name, -- type name
-               Name, -- constructor name
-               Either Int -- field position
-                      Name -- field name
-             )
-
-instance Ppr Field where
-    ppr (tname, cname, field) = ptext $
-        "field " ++
-        show (unReifyName tname) ++ "." ++
-        either (\ n -> show (unReifyName cname) ++ "[" ++ show n ++ "]") (\ f -> show (unReifyName f)) field
-
-instance Ppr (Maybe Field, E Type) where
-    ppr (mf, typ) = ptext $ pprint typ ++ maybe "" (\fld -> " (field " ++ pprint fld ++ ")") mf
-
-instance Ppr (Maybe Field, Type) where
-    ppr (mf, typ) = ptext $ pprint typ ++ " (unexpanded)" ++ maybe "" (\fld -> " (field " ++ pprint fld ++ ")") mf
 
 -- | For simple type graphs always set _field and _synonyms to Nothing.
 data TypeGraphVertex

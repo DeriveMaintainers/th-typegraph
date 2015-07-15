@@ -46,7 +46,8 @@ import Language.Haskell.TH.Syntax hiding (lift)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges, typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E))
 import Language.Haskell.TH.TypeGraph.Info (makeTypeInfo)
-import Language.Haskell.TH.TypeGraph.Shape (FieldType(..), fName, fType, constructorFields, constructorName)
+import Language.Haskell.TH.TypeGraph.Prelude (constructorName)
+import Language.Haskell.TH.TypeGraph.Shape (FieldType(..), fName, fType, constructorFieldTypes)
 import Language.Haskell.TH.TypeGraph.Vertex (etype, TypeGraphVertex)
 import Prelude hiding ((.))
 
@@ -149,7 +150,7 @@ fieldLens e@(StackElement fld con _) =
                   -- Build a pattern expression to extract the field
                   do cname <- lookupValueName (nameBase $ constructorName con) >>= return . fromMaybe (error $ "fieldLens: " ++ show e)
                      f <- newName "f"
-                     let n = length $ constructorFields con
+                     let n = length $ constructorFieldTypes con
                      as <- mapM newName (map (\ p -> "_a" ++ show p) [1..n])
                      [| lens -- \ (Con _ _ _ x _ _) -> x
                              $(lamE [conP cname (set (nthLens fieldPos) (varP f) (repeat wildP))] [| $(varE f) :: $(pure (fType fld)) |])
@@ -175,7 +176,7 @@ makeLenses' typeNames =
       doInfo (TyConI dec@(NewtypeD _ typeName _ con _)) = doCons dec typeName [con]
       doInfo (TyConI dec@(DataD _ typeName _ cons _)) = doCons dec typeName cons
       doInfo _ = return ()
-      doCons dec typeName cons = mapM_ (\ con -> mapM_ (foldField (doField typeName) dec con) (constructorFields con)) cons
+      doCons dec typeName cons = mapM_ (\ con -> mapM_ (foldField (doField typeName) dec con) (constructorFieldTypes con)) cons
 
       -- (mkName $ nameBase $ tName dec) dec lensNamer) >>= tell
       doField :: Name -> FieldType -> StackT (WriterT [Dec] Q) ()

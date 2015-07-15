@@ -8,8 +8,9 @@ import Control.Lens hiding (Strict, cons)
 import Control.Monad.State (MonadState, execStateT)
 import Data.Set as Set (Set, delete, difference, empty, fromList, insert, member)
 import Language.Haskell.TH
+import Language.Haskell.TH.Desugar ({- instances -})
 import Language.Haskell.TH.Syntax (Quasi(qReify))
-import Language.Haskell.TH.TypeGraph.Shape (pprint')
+import Language.Haskell.TH.TypeGraph.Prelude (pprint')
 
 data St
     = St { _result :: Set Name

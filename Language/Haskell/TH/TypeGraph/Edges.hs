@@ -17,6 +17,7 @@ module Language.Haskell.TH.TypeGraph.Edges
     , cut
     , cutM
     , cutEdges
+    , cutEdgesM
     , isolate
     , isolateM
     , link
@@ -41,13 +42,13 @@ import Data.Map as Map ((!), alter, delete, filterWithKey, fromList, keys, looku
 import qualified Data.Map as Map (toList)
 import Data.Maybe (mapMaybe)
 import Data.Monoid ((<>))
-import Data.Set as Set (delete, empty, filter, insert, map, member, fromList, Set, singleton, union)
+import Data.Set as Set (delete, empty, filter, insert, map, member, fromList, Set, singleton, toList, union)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Info (TypeInfo, infoMap, typeSet, allVertices, vertex)
-import Language.Haskell.TH.TypeGraph.Shape (pprint')
+import Language.Haskell.TH.TypeGraph.Prelude (pprint')
 import Language.Haskell.TH.TypeGraph.Vertex (simpleVertex, TypeGraphVertex)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
@@ -121,7 +122,7 @@ instance Ppr key => Ppr (GraphEdges node key) where
     ppr x =
         ptext $ intercalate "\n  " $
           "edges:" : (List.map
-                       (\(k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ " ->" ++ if null ks then " []" else "") : List.map pprint' (toList ks)))
+                       (\(k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ " ->" ++ if null ks then " []" else "") : List.map pprint' (Set.toList ks)))
                        (Map.toList x))
 
 -- | Isolate and remove matching nodes
@@ -136,6 +137,13 @@ cutM victim edges = do
 
 cutEdges :: (Eq a, Ord a) => (a -> a -> Bool) -> GraphEdges node a -> (GraphEdges node a)
 cutEdges p edges = Map.mapWithKey (\key (hint, gkeys) -> (hint, Set.filter (\gkey -> not (p key gkey)) gkeys)) edges
+
+cutEdgesM :: (Monad m, Eq a, Ord a) => (a -> a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
+cutEdgesM p edges = do
+  let pairs = Map.toList edges
+  ss <- mapM (\(a, (_, s)) -> filterM (\b -> not <$> p a b) (Set.toList s)) pairs
+  let pairs' = List.map (\ ((a, (h, _)), s') -> (a, (h, Set.fromList s'))) (zip pairs ss)
+  return $ Map.fromList pairs'
 
 -- | Remove all the in- and out-edges of matching nodes
 isolate :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges node a -> GraphEdges node a

@@ -26,8 +26,8 @@ module Language.Haskell.TH.TypeGraph.Graph
     , VertexStatus(..)
     , typeGraphEdges'
     , adjacent
-    , typeVertex
-    , fieldVertex
+    , typeGraphVertex
+    , typeGraphVertexOfField
     ) where
 
 #if __GLASGOW_HASKELL__ < 709
@@ -53,7 +53,6 @@ import Data.Set as Set (map)
 import Data.Set as Set (empty, fromList, insert, member, Set, singleton, toList, unions)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
-import Language.Haskell.TH.Context (HasSet(getSet, modifySet))
 import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext)
@@ -61,6 +60,7 @@ import Language.Haskell.TH.Syntax (Quasi(..))
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Info (startTypes, TypeInfo, vertex)
+import Language.Haskell.TH.TypeGraph.Prelude (HasSet(getSet, modifySet))
 import Language.Haskell.TH.TypeGraph.Stack (HasStack(withStack, push), StackElement(StackElement))
 import Language.Haskell.TH.TypeGraph.Vertex (simpleVertex, TypeGraphVertex, etype)
 import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or)
@@ -145,15 +145,15 @@ isReachable gkey key0 (g, _vf, kf) = path g (fromJust $ kf key0) (fromJust $ kf 
 
 -- | Return the TypeGraphVertex associated with a particular type,
 -- with no field specified.
-typeVertex :: (MonadReader TypeGraph m, DsMonad m) => Type -> m TypeGraphVertex
-typeVertex typ = do
+typeGraphVertex :: (MonadReader TypeGraph m, DsMonad m) => Type -> m TypeGraphVertex
+typeGraphVertex typ = do
         typ' <- expandType typ
         ask >>= runReaderT (vertex Nothing typ') . view typeInfo
         -- magnify typeInfo $ vertex Nothing typ'
 
 -- | Return the TypeGraphVertex associated with a particular type and field.
-fieldVertex :: (MonadReader TypeGraph m, DsMonad m) => (Name, Name, Either Int Name) -> Type -> m TypeGraphVertex
-fieldVertex fld typ = do
+typeGraphVertexOfField :: (MonadReader TypeGraph m, DsMonad m) => (Name, Name, Either Int Name) -> Type -> m TypeGraphVertex
+typeGraphVertexOfField fld typ = do
         typ' <- expandType typ
         ask >>= runReaderT (vertex (Just fld) typ') . view typeInfo
         -- magnify typeInfo $ vertex (Just fld) typ'
@@ -193,7 +193,7 @@ typeGraphEdges'
     -> [Type]
     -> m (GraphEdges () TypeGraphVertex)
 typeGraphEdges' augment types = do
-  execStateT (mapM_ (\typ -> typeVertex typ >>= doNode) types) (mempty :: GraphEdges () TypeGraphVertex)
+  execStateT (mapM_ (\typ -> typeGraphVertex typ >>= doNode) types) (mempty :: GraphEdges () TypeGraphVertex)
     where
       doNode v = do
         s <- lift $ getSet
@@ -219,10 +219,10 @@ typeGraphEdges' augment types = do
 adjacent :: forall m. (MonadReader TypeGraph m, DsMonad m) => TypeGraphVertex -> m (Set TypeGraphVertex)
 adjacent typ =
     case view etype typ of
-      E (ForallT _ _ typ') -> typeVertex typ' >>= adjacent
+      E (ForallT _ _ typ') -> typeGraphVertex typ' >>= adjacent
       E (AppT c e) ->
-          typeVertex c >>= \c' ->
-          typeVertex e >>= \e' ->
+          typeGraphVertex c >>= \c' ->
+          typeGraphVertex e >>= \e' ->
           return $ Set.fromList [c', e']
       E (ConT name) -> do
         info <- qReify name
@@ -234,7 +234,7 @@ adjacent typ =
       doDec :: Dec -> m (Set TypeGraphVertex)
       doDec dec@(NewtypeD _ tname _ con _) = doCon tname dec con
       doDec dec@(DataD _ tname _ cns _) = Set.unions <$> mapM (doCon tname dec) cns
-      doDec (TySynD _tname _tvars typ') = singleton <$> typeVertex typ'
+      doDec (TySynD _tname _tvars typ') = singleton <$> typeGraphVertex typ'
       doDec _ = return mempty
 
       doCon :: Name -> Dec -> Con -> m (Set TypeGraphVertex)
@@ -244,7 +244,7 @@ adjacent typ =
       doCon tname dec (InfixC (_, lhs) cname (_, rhs)) = Set.unions <$> mapM (doField tname dec cname) [(Left 1, lhs), (Left 2, rhs)]
 
       doField :: Name -> Dec -> Name -> (Either Int Name, Type) -> m (Set TypeGraphVertex)
-      doField tname _dec cname (fld, ftype) = Set.singleton <$> fieldVertex (tname, cname, fld) ftype
+      doField tname _dec cname (fld, ftype) = Set.singleton <$> typeGraphVertexOfField (tname, cname, fld) ftype
 
 -- FIXME: pass in ti, pass in makeTypeGraphEdges, remove Q, move to TypeGraph.Graph
 makeTypeGraph :: (DsMonad m) => ReaderT TypeInfo m (GraphEdges () TypeGraphVertex) -> TypeInfo -> m TypeGraph
