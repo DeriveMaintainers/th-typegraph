@@ -17,12 +17,9 @@ import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (hcat, ptext)
 import Language.Haskell.TH.Syntax (Lift(lift))
-import Language.Haskell.TH.TypeGraph.Expand (E(E), markExpanded, runExpanded)
+import Language.Haskell.TH.TypeGraph.Expand (E(E), runExpanded)
 import Language.Haskell.TH.TypeGraph.Prelude (unReify, unReifyName)
 import Language.Haskell.TH.TypeGraph.Shape (Field)
-
-instance Lift (E Type) where
-    lift etype = [|markExpanded $(lift (runExpanded etype))|]
 
 -- | For simple type graphs always set _field and _synonyms to Nothing.
 data TypeGraphVertex

@@ -19,6 +19,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Language.Haskell.TH.TypeGraph.Expand
     ( Expanded(markExpanded, runExpanded')
@@ -36,6 +37,7 @@ import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar as DS (DsMonad, dsType, expand, typeToTH)
 import Language.Haskell.TH.Instances ()
+import Language.Haskell.TH.Syntax (Lift(lift))
 import Prelude hiding (pred)
 
 -- | This class lets us use the same expand* functions to work with
@@ -85,3 +87,6 @@ instance Expanded Pred (E Pred) where
 
 instance Ppr a => Ppr (E a) where
     ppr (E x) = ppr x
+
+instance Lift (E Type) where
+    lift etype = [|markExpanded $(lift (runExpanded etype))|]
