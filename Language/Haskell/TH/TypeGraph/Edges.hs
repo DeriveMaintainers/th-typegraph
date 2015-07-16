@@ -47,9 +47,9 @@ import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
-import Language.Haskell.TH.TypeGraph.Info (TypeInfo, infoMap, typeSet, allVertices, vertex)
+import Language.Haskell.TH.TypeGraph.Info (TypeInfo, infoMap, typeSet, allVertices, fieldVertex, typeVertex')
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
-import Language.Haskell.TH.TypeGraph.Vertex (simpleVertex, TypeGraphVertex)
+import Language.Haskell.TH.TypeGraph.Vertex (simpleVertex, TGV, TGVSimple)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Prelude hiding (foldr, mapM_, null)
@@ -61,61 +61,61 @@ type GraphEdges node key = Map key (node, Set key)
 -- This is not a recursive function, it stops when it reaches the field
 -- types.
 typeGraphEdges :: forall node m. (DsMonad m, Functor m, Default node, MonadReader TypeInfo m) =>
-                  m (GraphEdges node TypeGraphVertex)
+                  m (GraphEdges node TGV)
 typeGraphEdges = do
   execStateT (view typeSet >>= mapM_ (\t -> expandType t >>= doType)) mempty
     where
-      doType :: E Type -> StateT (GraphEdges node TypeGraphVertex) m ()
+      doType :: E Type -> StateT (GraphEdges node TGV) m ()
       doType typ = do
         vs <- allVertices Nothing typ
         mapM_ node vs
         case typ of
           E (ConT tname) -> view infoMap >>= \ mp -> doInfo vs (mp ! tname)
           E (AppT typ1 typ2) -> do
-            v1 <- vertex Nothing (E typ1)
-            v2 <- vertex Nothing (E typ2)
+            v1 <- typeVertex' (E typ1)
+            v2 <- typeVertex' (E typ2)
             mapM_ (flip edge v1) vs
             mapM_ (flip edge v2) vs
             doType (E typ1)
             doType (E typ2)
           _ -> return ()
 
-      doInfo :: Set TypeGraphVertex -> Info -> StateT (GraphEdges node TypeGraphVertex) m ()
+      doInfo :: Set TGV -> Info -> StateT (GraphEdges node TGV) m ()
       doInfo vs (TyConI dec) = doDec vs dec
       -- doInfo vs (PrimTyConI tname _ _) = return ()
       doInfo _ _ = return ()
 
-      doDec :: Set TypeGraphVertex -> Dec -> StateT (GraphEdges node TypeGraphVertex) m ()
+      doDec :: Set TGV -> Dec -> StateT (GraphEdges node TGV) m ()
       doDec _ (TySynD _ _ _) = return () -- This type will be in typeSet
       doDec vs (NewtypeD _ tname _ constr _) = doCon vs tname constr
       doDec vs (DataD _ tname _ constrs _) = mapM_ (doCon vs tname) constrs
       doDec _ _ = return ()
 
-      doCon :: Set TypeGraphVertex -> Name -> Con -> StateT (GraphEdges node TypeGraphVertex) m ()
+      doCon :: Set TGV -> Name -> Con -> StateT (GraphEdges node TGV) m ()
       doCon vs tname (ForallC _ _ con) = doCon vs tname con
       doCon vs tname (NormalC cname flds) = mapM_ (uncurry (doField vs tname cname)) (List.map (\ (n, (_, ftype)) -> (Left n, ftype)) (zip [1..] flds))
       doCon vs tname (RecC cname flds) = mapM_ (uncurry (doField vs tname cname)) (List.map (\ (fname, _, ftype) -> (Right fname, ftype)) flds)
       doCon vs tname (InfixC (_, lhs) cname (_, rhs)) = doField vs tname cname (Left 1) lhs >> doField vs tname cname (Left 2) rhs
 
       -- Connect the vertex for this record type to one particular field vertex
-      doField ::  DsMonad m => Set TypeGraphVertex -> Name -> Name -> Either Int Name -> Type -> StateT (GraphEdges node TypeGraphVertex) m ()
+      doField ::  DsMonad m => Set TGV -> Name -> Name -> Either Int Name -> Type -> StateT (GraphEdges node TGV) m ()
       doField vs tname cname fld ftyp = do
-        v2 <- expandType ftyp >>= vertex (Just (tname, cname, fld))
-        v3 <- expandType ftyp >>= vertex Nothing
+        v2 <- expandType ftyp >>= fieldVertex (tname, cname, fld)
+        v3 <- expandType ftyp >>= typeVertex'
         edge v2 v3
         mapM_ (flip edge v2) vs
         -- Here's where we don't recurse, see?
         -- doVertex v2
 
-      node :: TypeGraphVertex -> StateT (GraphEdges node TypeGraphVertex) m ()
+      node :: TGV -> StateT (GraphEdges node TGV) m ()
       -- node v = pass (return ((), (Map.alter (Just . maybe (def, Set.empty) id) v)))
       node v = modify (Map.alter (Just . maybe (def, Set.empty) id) v)
 
-      edge :: TypeGraphVertex -> TypeGraphVertex -> StateT (GraphEdges node TypeGraphVertex) m ()
+      edge :: TGV -> TGV -> StateT (GraphEdges node TGV) m ()
       edge v1 v2 = node v2 >> modify f
-          where f :: GraphEdges node TypeGraphVertex -> GraphEdges node TypeGraphVertex
+          where f :: GraphEdges node TGV -> GraphEdges node TGV
                 f = Map.alter g v1
-                g :: (Maybe (node, Set TypeGraphVertex) -> Maybe (node, Set TypeGraphVertex))
+                g :: (Maybe (node, Set TGV) -> Maybe (node, Set TGV))
                 g = Just . maybe (def, singleton v2) (over _2 (Set.insert v2))
 
 instance Ppr key => Ppr (GraphEdges node key) where
@@ -192,7 +192,7 @@ dissolveM victim edges = do
 -- | Simplify a graph by throwing away the field information in each
 -- node.  This means the nodes only contain the fully expanded Type
 -- value (and any type synonyms.)
-simpleEdges :: Monoid node => GraphEdges node TypeGraphVertex -> GraphEdges node TypeGraphVertex
+simpleEdges :: Monoid node => GraphEdges node TGV -> GraphEdges node TGVSimple
 simpleEdges = Map.mapWithKey (\v (n, s) -> (n, Set.delete v s)) .    -- delete any self edges
               Map.mapKeysWith combine simpleVertex .   -- simplify each vertex
               Map.map (over _2 (Set.map simpleVertex)) -- simplify the out edges

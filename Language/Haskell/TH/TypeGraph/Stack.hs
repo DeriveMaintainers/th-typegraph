@@ -48,7 +48,7 @@ import Language.Haskell.TH.TypeGraph.Expand (E(E))
 import Language.Haskell.TH.TypeGraph.Info (makeTypeInfo)
 import Language.Haskell.TH.TypeGraph.Prelude (constructorName)
 import Language.Haskell.TH.TypeGraph.Shape (FieldType(..), fName, fType, constructorFieldTypes)
-import Language.Haskell.TH.TypeGraph.Vertex (etype, TypeGraphVertex)
+import Language.Haskell.TH.TypeGraph.Vertex (etype, TGV)
 import Prelude hiding ((.))
 
 -- | The information required to extact a field value from a value.
@@ -167,7 +167,7 @@ fieldLens e@(StackElement fld con _) =
 -- makeLenses should be used.
 makeLenses' :: [Name] -> Q [Dec]
 makeLenses' typeNames =
-    execWriterT $ execStackT $ makeTypeInfo st >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges () TypeGraphVertex) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
+    execWriterT $ execStackT $ makeTypeInfo st >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges () TGV) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
     where
       st = map ConT typeNames
 

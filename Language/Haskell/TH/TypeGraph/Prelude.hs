@@ -1,5 +1,7 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 module Language.Haskell.TH.TypeGraph.Prelude
@@ -11,10 +13,15 @@ module Language.Haskell.TH.TypeGraph.Prelude
     , HasSet(getSet, modifySet)
     , unReify
     , unReifyName
+    , adjacent'
+    , reachable'
     ) where
 
+import Control.Lens
 import Data.Generics (Data, everywhere, mkT)
+import Data.Graph as Graph
 import Data.Map as Map (Map, fromList, toList)
+import Data.Maybe (fromMaybe)
 import Data.Set as Set (fromList, Set, toList)
 import Language.Haskell.TH
 import Language.Haskell.TH.PprLib (ptext)
@@ -104,3 +111,18 @@ unReify = everywhere (mkT unReifyName)
 
 unReifyName :: Name -> Name
 unReifyName = mkName . nameBase
+
+-- | Return a key's list of adjacent keys
+adjacent' :: forall node key. (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex) -> key -> [key]
+adjacent' (_, vf, kf) k =
+    view _3 $ vf v
+    where
+      v = fromMaybe (error "Language.Haskell.TH.TypeGraph.Prelude.adjacent") (kf k)
+
+-- | Return a key's list of reachable keys
+reachable' :: forall node key. (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex) -> key -> [key]
+reachable' (g, vf, kf) k =
+    map (view _2 . vf) $ reachableVerts
+    where
+      reachableVerts = Graph.reachable g v
+      v = fromMaybe (error "Language.Haskell.TH.TypeGraph.Prelude.reachable") (kf k)

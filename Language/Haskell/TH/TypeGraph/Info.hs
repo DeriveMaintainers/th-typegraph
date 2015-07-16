@@ -14,8 +14,8 @@ module Language.Haskell.TH.TypeGraph.Info
       TypeInfo, startTypes, fields, infoMap, synonyms, typeSet
     , makeTypeInfo
     -- * Update
-    , vertex
     , typeVertex
+    , typeVertex'
     , fieldVertex
     -- * Query
     , fieldVertices
@@ -40,7 +40,7 @@ import Language.Haskell.TH.Syntax (Lift(lift), Quasi(..))
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
 import Language.Haskell.TH.TypeGraph.Shape (Field)
-import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), etype, field)
+import Language.Haskell.TH.TypeGraph.Vertex (TGV(..), TGVSimple(..), etype)
 
 -- | Information collected about the graph implied by the structure of
 -- one or more 'Type' values.
@@ -150,31 +150,38 @@ makeTypeInfo types =
                 , _synonyms = mempty
                 , _fields = mempty})
 
-allVertices :: (Functor m, DsMonad m, MonadReader TypeInfo m) =>
-               Maybe Field -> E Type -> m (Set TypeGraphVertex)
-allVertices (Just fld) etyp = singleton <$> vertex (Just fld) etyp
-allVertices Nothing etyp = vertex Nothing etyp >>= \v -> fieldVertices v >>= \vs -> return $ Set.insert v vs
+allVertices :: (Functor m, DsMonad m, MonadReader TypeInfo m) => Maybe Field -> E Type -> m (Set TGV)
+allVertices (Just fld) etyp = singleton <$> fieldVertex fld etyp
+allVertices Nothing etyp = do
+  v <- typeVertex etyp
+  vs <- fieldVertices v
+  return $ Set.insert (TGV {_vsimple = v, _field = Nothing}) vs
 
 -- | Find the vertices that involve a particular type - if the field
 -- is specified it return s singleton, otherwise it returns a set
 -- containing a vertex one for the type on its own, and one for each
 -- field containing that type.
-fieldVertices :: MonadReader TypeInfo m => TypeGraphVertex -> m (Set TypeGraphVertex)
+fieldVertices :: MonadReader TypeInfo m => TGVSimple -> m (Set TGV)
 fieldVertices v = do
   fm <- view fields
   let fs = Map.findWithDefault Set.empty (view etype v) fm
-  return $ Set.map (\fld' -> set field (Just fld') v) fs
+  return $ Set.map (\fld' -> TGV {_vsimple = v, _field = Just fld'}) fs
 
 -- | Build a vertex from the given 'Type' and optional 'Field'.
-vertex :: forall m. (DsMonad m, MonadReader TypeInfo m) => Maybe Field -> E Type -> m TypeGraphVertex
-vertex fld etyp = maybe (typeVertex etyp) (fieldVertex etyp) fld
+-- vertex :: forall m. (DsMonad m, MonadReader TypeInfo m) => Maybe Field -> E Type -> m TypeGraphVertex
+-- vertex fld etyp = maybe (typeVertex etyp) (fieldVertex etyp) fld
 
 -- | Build a non-field vertex
-typeVertex :: MonadReader TypeInfo m => E Type -> m TypeGraphVertex
+typeVertex :: MonadReader TypeInfo m => E Type -> m TGVSimple
 typeVertex etyp = do
   sm <- view synonyms
-  return $ TypeGraphVertex {_field = Nothing, _syns = Map.findWithDefault Set.empty etyp sm, _etype = etyp}
+  return $ TGVSimple {_syns = Map.findWithDefault Set.empty etyp sm, _etype = etyp}
+
+typeVertex' :: MonadReader TypeInfo m => E Type -> m TGV
+typeVertex' etyp = do
+  v <- typeVertex etyp
+  return $ TGV {_vsimple = v, _field = Nothing}
 
 -- | Build a vertex associated with a field
-fieldVertex :: MonadReader TypeInfo m => E Type -> Field -> m TypeGraphVertex
-fieldVertex etyp fld' = typeVertex etyp >>= \v -> return $ v {_field = Just fld'}
+fieldVertex :: MonadReader TypeInfo m => Field -> E Type -> m TGV
+fieldVertex fld' etyp = typeVertex etyp >>= \v -> return $ TGV {_vsimple = v, _field = Just fld'}

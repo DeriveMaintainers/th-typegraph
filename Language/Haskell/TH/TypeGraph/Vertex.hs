@@ -3,13 +3,12 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 module Language.Haskell.TH.TypeGraph.Vertex
     ( TypeGraphVertex(..)
-    , field, syns, etype
+    , TGV(..), field, vsimple
+    , TGVSimple(..), syns, etype
     , simpleVertex
-    , typeNames
-    , bestType
     ) where
 
-import Control.Lens -- (makeLenses, view)
+import Control.Lens
 import Data.List as List (concatMap, intersperse)
 import Data.Set as Set (insert, minView, Set, toList)
 import Language.Haskell.Exts.Syntax ()
@@ -22,15 +21,31 @@ import Language.Haskell.TH.TypeGraph.Prelude (unReify, unReifyName)
 import Language.Haskell.TH.TypeGraph.Shape (Field)
 
 -- | For simple type graphs always set _field and _synonyms to Nothing.
-data TypeGraphVertex
-    = TypeGraphVertex
+data TGV
+    = TGV
       { _field :: Maybe Field -- ^ The record field which contains this type
-      , _syns :: Set Name -- ^ All the type synonyms that expand to this type
+      , _vsimple :: TGVSimple
+      } deriving (Eq, Ord, Show)
+
+-- | For simple type graphs always set _field and _synonyms to Nothing.
+data TGVSimple
+    = TGVSimple
+      { _syns :: Set Name -- ^ All the type synonyms that expand to this type
       , _etype :: E Type -- ^ The fully expanded type
       } deriving (Eq, Ord, Show)
 
-instance Ppr TypeGraphVertex where
-    ppr (TypeGraphVertex {_field = fld, _syns = ns, _etype = typ}) =
+instance Ppr TGVSimple where
+    ppr (TGVSimple {_syns = ns, _etype = typ}) =
+        hcat (ppr (unReify (runExpanded typ)) :
+              case (Set.toList ns) of
+                 [] -> []
+                 _ ->   [ptext " ("] ++
+                        intersperse (ptext ", ")
+                          (List.concatMap (\ n -> [ptext ("aka " ++ show (unReifyName n))]) (Set.toList ns)) ++
+                        [ptext ")"])
+
+instance Ppr TGV where
+    ppr (TGV {_field = fld, _vsimple = TGVSimple {_syns = ns, _etype = typ}}) =
         hcat (ppr (unReify (runExpanded typ)) :
               case (fld, Set.toList ns) of
                  (Nothing, []) -> []
@@ -40,22 +55,31 @@ instance Ppr TypeGraphVertex where
                            maybe [] (\ f -> [ppr f]) fld) ++
                         [ptext ")"])
 
-$(makeLenses ''TypeGraphVertex)
+$(makeLenses ''TGV)
+$(makeLenses ''TGVSimple)
 
-simpleVertex :: TypeGraphVertex -> TypeGraphVertex
-simpleVertex v = v {_field = Nothing}
+simpleVertex :: TGV -> TGVSimple
+simpleVertex = _vsimple
 
--- | Return the set of 'Name' of a type's synonyms, plus the name (if
--- any) used in its data declaration.  Note that this might return the
--- empty set.
-typeNames :: TypeGraphVertex -> Set Name
-typeNames (TypeGraphVertex {_etype = E (ConT tname), _syns = s}) = Set.insert tname s
-typeNames (TypeGraphVertex {_syns = s}) = s
+class TypeGraphVertex v where
+    typeNames :: v -> Set Name
+    -- ^ Return the set of 'Name' of a type's synonyms, plus the name (if
+    -- any) used in its data declaration.  Note that this might return the
+    -- empty set.
+    bestType :: v -> Type
 
-bestType :: TypeGraphVertex -> Type
-bestType (TypeGraphVertex {_etype = E (ConT name)}) = ConT name
-bestType v = maybe (let (E x) = view etype v in x) (ConT . fst) (Set.minView (view syns v))
+instance TypeGraphVertex TGV where
+    typeNames = typeNames . _vsimple
+    bestType = bestType . _vsimple
 
-instance Lift TypeGraphVertex where
-    lift (TypeGraphVertex {_field = f, _syns = ns, _etype = t}) =
-        [|TypeGraphVertex {_field = $(lift f), _syns = $(lift ns), _etype = $(lift t)}|]
+instance TypeGraphVertex TGVSimple where
+    typeNames (TGVSimple {_etype = E (ConT tname), _syns = s}) = Set.insert tname s
+    typeNames (TGVSimple {_syns = s}) = s
+    bestType (TGVSimple {_etype = E (ConT name)}) = ConT name
+    bestType v = maybe (let (E x) = view etype v in x) (ConT . fst) (Set.minView (view syns v))
+
+instance Lift TGV where
+    lift (TGV {_field = f, _vsimple = s}) = [|TGV {_field = $(lift f), _vsimple = $(lift s)}|]
+
+instance Lift TGVSimple where
+    lift (TGVSimple {_syns = ns, _etype = t}) = [|TGVSimple {_syns = $(lift ns), _etype = $(lift t)}|]

@@ -16,8 +16,8 @@ import Language.Haskell.TH
 import Language.Haskell.TH.TypeGraph.Edges (dissolveM, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Expand (expandType, runExpanded, E(E))
 import Language.Haskell.TH.TypeGraph.Free (freeTypeVars, typeArity)
-import Language.Haskell.TH.TypeGraph.Info (makeTypeInfo, synonyms, vertex)
-import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
+import Language.Haskell.TH.TypeGraph.Info (makeTypeInfo, synonyms, typeVertex')
+import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), TGV(..), TGVSimple(..), etype, field, vsimple, syns)
 import Language.Haskell.TH.Desugar (withLocalDeclarations)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax
@@ -34,7 +34,7 @@ tests = do
      $([t|String|] >>= \string -> makeTypeInfo [string] >>= lift . view synonyms) `shouldBe` (Map.fromList [(E (AppT ListT (ConT ''Char)), Set.singleton ''String)])
 
   it "records a type synonym 2" $ do
-     $([t|String|] >>= \string -> makeTypeInfo [string] >>= runReaderT (expandType string >>= vertex Nothing) >>= lift) `shouldBe` (TypeGraphVertex Nothing (singleton ''String) (E (AppT ListT (ConT ''Char))))
+     $([t|String|] >>= \string -> makeTypeInfo [string] >>= runReaderT (expandType string >>= typeVertex') >>= lift) `shouldBe` (TGV {_field = Nothing, _vsimple = TGVSimple {_syns = singleton ''String, _etype = E (AppT ListT (ConT ''Char))}})
 
   it "can build the TypeInfoGraph for Type" $ do
     $(runQ [t|Type|] >>= \typ -> makeTypeInfo [typ] >>= lift . pprint) `shouldBe` typeInfoOfType
@@ -64,7 +64,7 @@ tests = do
      setDifferences (Set.fromList $(withLocalDeclarations [] $
                                 runQ [t|Type|] >>= \typ ->
                                 makeTypeInfo [typ] >>= runReaderT typeGraphEdges' >>= return . simpleEdges >>=
-                                dissolveM (\ v -> (/= 0) <$> (typeArity . runExpanded . _etype) v) >>=
+                                dissolveM (\ v -> (/= 0) <$> (typeArity . runExpanded . view etype) v) >>=
                                 runQ . lift . edgesToStrings)) arity0TypeEdges
         `shouldBe` noDifferences
 #if 0
