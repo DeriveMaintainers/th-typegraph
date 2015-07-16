@@ -1,8 +1,9 @@
 # NB: don't set `language: haskell` here
 
-# th-typegraph requires template-haskell>=2.9, so ghc-7.6 is too old
+# There are bugs in 7.8 that affect the th-context package, so I'm
+# dropping support here and elsewhere.  Also, the #ifs required to
+# get the right symbols from Control.Applicative are annoying.
 env:
- - CABALVER=1.18 GHCVER=7.8.4 HAPPYVER=1.19.5 ALEXVER=3.1.4
  - CABALVER=1.22 GHCVER=7.10.2 HAPPYVER=1.19.5 ALEXVER=3.1.4
  - CABALVER=head GHCVER=head HAPPYVER=1.19.5 ALEXVER=3.1.4   # see section about GHC HEAD snapshots
 
