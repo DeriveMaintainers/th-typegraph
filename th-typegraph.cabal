@@ -1,5 +1,5 @@
 name:               th-typegraph
-version:            0.20
+version:            0.21
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
@@ -18,15 +18,16 @@ extra-source-files: test/Common.hs test/Tests.hs test/TypeGraph.hs test/Values.h
 
 library
   build-depends:
-    base >= 4.2 && < 5,
+    base >= 4.8 && < 5,
     base-compat,
     containers,
     data-default,
     haskell-src-exts,
     lens,
     mtl,
+    set-extra,
     syb,
-    template-haskell >= 2.9,
+    template-haskell >= 2.10,
     th-desugar,
     th-orphans >= 0.10.0
   ghc-options:      -Wall

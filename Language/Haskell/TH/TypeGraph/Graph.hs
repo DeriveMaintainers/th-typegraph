@@ -8,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -38,7 +39,7 @@ import Control.Applicative
 #endif
 import Control.Lens -- (makeLenses, over, view)
 import Control.Monad (when)
-import Control.Monad (filterM)
+import Control.Monad as List (filterM)
 import Control.Monad.Reader (ask, local, MonadReader, ReaderT, runReaderT)
 import Control.Monad.State (execStateT, modify, StateT)
 import Control.Monad.Trans (lift)
@@ -49,8 +50,8 @@ import Data.List as List (map)
 import Data.Map as Map (alter, update)
 import qualified Data.Map as Map (toList)
 import Data.Maybe (fromJust, mapMaybe)
-import Data.Set as Set (map)
-import Data.Set as Set (empty, fromList, insert, member, Set, singleton, toList, unions)
+import Data.Set.Extra as Set (empty, flatten, filterM, fromList, insert, map, mapM, member, Set, singleton, toList, unions)
+import Data.Traversable as Traversable
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar (DsMonad)
@@ -95,18 +96,17 @@ instance Monad m => HasStack (ReaderT TypeGraph m) where
     withStack f = ask >>= f . view stack
     push fld con dec action = local (stack %~ (\s -> StackElement fld con dec : s)) action
 
--- | A lens key is a pair of vertexes corresponding to a Path instance.
 allLensKeys :: (DsMonad m, MonadReader TypeGraph m) => m (Set (TypeGraphVertex, TypeGraphVertex))
 allLensKeys = do
   pathKeys <- allPathKeys
-  Set.fromList <$> filterM (uncurry goalReachableSimple) [ (g, k) | g <- Foldable.toList (Set.map simpleVertex pathKeys),
-                                                                    k <- Foldable.toList (Set.map simpleVertex pathKeys) ]
+  Set.fromList <$> List.filterM (uncurry goalReachableSimple) [ (g, k) | g <- Foldable.toList (Set.map simpleVertex pathKeys),
+                                                                         k <- Foldable.toList (Set.map simpleVertex pathKeys) ]
 
 allPathKeys :: forall m. (DsMonad m, MonadReader TypeGraph m) => m (Set TypeGraphVertex)
 allPathKeys = do
   -- (g, vf, kf) <- graphFromMap <$> view edges
   (g, vf, kf) <- view graph
-  kernel <- view typeInfo >>= \ti -> runReaderT (mapM expandType (view startTypes ti) >>= mapM (vertex Nothing)) ti
+  kernel <- view typeInfo >>= \ti -> runReaderT (Traversable.mapM expandType (view startTypes ti) >>= Traversable.mapM (vertex Nothing)) ti
   let kernel' = mapMaybe kf kernel
   let keep = Set.fromList $ concatMap (reachable g) kernel'
       keep' = Set.map (\(_, key, _) -> key) . Set.map vf $ keep
@@ -233,15 +233,15 @@ adjacent typ =
     where
       doDec :: Dec -> m (Set TypeGraphVertex)
       doDec dec@(NewtypeD _ tname _ con _) = doCon tname dec con
-      doDec dec@(DataD _ tname _ cns _) = Set.unions <$> mapM (doCon tname dec) cns
+      doDec dec@(DataD _ tname _ cns _) = Set.unions <$> Traversable.mapM (doCon tname dec) cns
       doDec (TySynD _tname _tvars typ') = singleton <$> typeGraphVertex typ'
       doDec _ = return mempty
 
       doCon :: Name -> Dec -> Con -> m (Set TypeGraphVertex)
       doCon tname dec (ForallC _ _ con) = doCon tname dec con
-      doCon tname dec (NormalC cname fields) = Set.unions <$> mapM (doField tname dec cname) (zip (List.map Left ([1..] :: [Int])) (List.map snd fields))
-      doCon tname dec (RecC cname fields) = Set.unions <$> mapM (doField tname dec cname) (List.map (\ (fname, _, typ') -> (Right fname, typ')) fields)
-      doCon tname dec (InfixC (_, lhs) cname (_, rhs)) = Set.unions <$> mapM (doField tname dec cname) [(Left 1, lhs), (Left 2, rhs)]
+      doCon tname dec (NormalC cname fields) = Set.unions <$> Traversable.mapM (doField tname dec cname) (zip (List.map Left ([1..] :: [Int])) (List.map snd fields))
+      doCon tname dec (RecC cname fields) = Set.unions <$> Traversable.mapM (doField tname dec cname) (List.map (\ (fname, _, typ') -> (Right fname, typ')) fields)
+      doCon tname dec (InfixC (_, lhs) cname (_, rhs)) = Set.unions <$> Traversable.mapM (doField tname dec cname) [(Left 1, lhs), (Left 2, rhs)]
 
       doField :: Name -> Dec -> Name -> (Either Int Name, Type) -> m (Set TypeGraphVertex)
       doField tname _dec cname (fld, ftype) = Set.singleton <$> typeGraphVertexOfField (tname, cname, fld) ftype
