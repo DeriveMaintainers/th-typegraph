@@ -23,7 +23,7 @@ import Common
 typeInfoOfType =
     unlines
 #if MIN_VERSION_template_haskell(2,10,0)
-    [ "TypeGraphInfo:",
+    [ "TypeInfo:",
       "  typeSet:",
       "    [GHC.Types.Char]",
       "    [Language.Haskell.TH.Syntax.Pred]",
