@@ -17,6 +17,7 @@ module Language.Haskell.TH.TypeGraph.Graph
     , TypeGraph(TypeGraph, _typeInfo, _edges, _graph, _gsimple, _stack) -- temporary
     , graphFromMap
 
+    , allLensKeys
     , allPathKeys
     , allPathStarts
     , reachableFrom
@@ -49,10 +50,10 @@ import Data.Default (Default(def))
 import Data.Foldable as Foldable
 import Data.Graph hiding (edges)
 import Data.List as List (map)
-import Data.Map as Map (alter, update)
+import Data.Map as Map (alter, fromList, fromListWith, insert, Map, update)
 import qualified Data.Map as Map (toList)
 import Data.Maybe (fromJust, mapMaybe)
-import Data.Set.Extra as Set (empty, flatten, filterM, fromList, insert, map, mapM, member, Set, singleton, toList, unions)
+import Data.Set.Extra as Set (empty, flatten, filterM, foldr, fromList, insert, map, mapM, member, Set, singleton, toList, union, unions)
 import Data.Traversable as Traversable
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
@@ -63,7 +64,7 @@ import Language.Haskell.TH.Syntax (Quasi(..))
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Info (startTypes, TypeInfo, typeVertex', fieldVertex)
-import Language.Haskell.TH.TypeGraph.Prelude (HasSet(getSet, modifySet))
+import Language.Haskell.TH.TypeGraph.Prelude (HasSet(getSet, modifySet), adjacent', reachable')
 import Language.Haskell.TH.TypeGraph.Stack (HasStack(withStack, push), StackElement(StackElement))
 import Language.Haskell.TH.TypeGraph.Vertex (simpleVertex, TGV, TGVSimple, vsimple, TypeGraphVertex, etype)
 import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or)
@@ -98,46 +99,28 @@ instance Monad m => HasStack (ReaderT TypeGraph m) where
     withStack f = ask >>= f . view stack
     push fld con dec action = local (stack %~ (\s -> StackElement fld con dec : s)) action
 
-#if 0
--- | All the types for which we will generate Path types, along with
--- the corresponding set of goal types.
-allKeys :: (DsMonad m, MonadReader TypeGraph m) => m (Set (TGV, Set TGV, Set TGV))
-allKeys = do
-  (g, vf, kf) <- view graph
-  -- (gs, vfs, kfs) <- view gsimple
-  ti <- view typeInfo
-  st <- runReaderT (Traversable.mapM expandType (view startTypes ti) >>= Traversable.mapM (vertex Nothing)) ti
-  let st' = mapMaybe kf st
-  let pt = Set.fromList $ concatMap (reachable g) st'
-      pt' = Set.map (\(_, key, _) -> key) . Set.map vf $ pt
-      pt'' = Set.map simpleVertex pt'
-  Set.mapM (\t -> do goals <- Set.filterM (\g -> goalReachableSimple g t) pt''
-                     let Just v = vf t
-                         (_, _, adjacent) <- kf v
-                     return (t, Set.fromList adjacent, goals)) pt''
-
-allPathKeys :: (DsMonad m, MonadReader TypeGraph m) => m (Set (TGV, TGV))
-allPathKeys = (Set.flatten . Set.map (\ (t, s) -> Set.map (t,) s)) <$> allKeys
-
-allPathStarts :: forall m. (DsMonad m, MonadReader TypeGraph m) => m (Set TGV)
-allPathStarts = Set.map fst <$> allKeys
-#else
-allPathKeys :: (DsMonad m, MonadReader TypeGraph m) => m (Set (TGV, TGV))
-allPathKeys = do
-  pathKeys <- allPathStarts
-  Set.fromList <$> List.filterM (uncurry goalReachableSimple') [ (g, k) | g <- Foldable.toList pathKeys,
-                                                                          k <- Foldable.toList pathKeys ]
-
 allPathStarts :: forall m. (DsMonad m, MonadReader TypeGraph m) => m (Set TGV)
 allPathStarts = do
   -- (g, vf, kf) <- graphFromMap <$> view edges
   (g, vf, kf) <- view graph
   kernel <- view typeInfo >>= \ti -> runReaderT (Traversable.mapM expandType (view startTypes ti) >>= Traversable.mapM typeVertex') ti
-  let kernel' = mapMaybe kf kernel
-  let keep = Set.fromList $ concatMap (reachable g) kernel'
-      keep' = Set.map (\(_, key, _) -> key) . Set.map vf $ keep
+  let keep = Set.fromList $ concatMap (reachable g) (mapMaybe kf kernel)
+      keep' = Set.map (view _2) . Set.map vf $ keep
   return keep'
-#endif
+
+-- | Lenses represent steps in a path, but the start point is a type
+-- vertex and the endpoint is a field vertex.
+allLensKeys ::  (DsMonad m, MonadReader TypeGraph m) => m (Map TGVSimple (Set TGV))
+allLensKeys = do
+  g <- view graph
+  gs <- view gsimple
+  allPathStarts >>= return . Map.fromListWith Set.union . List.map (\x -> (simpleVertex x, Set.fromList (adjacent' g x))) . Set.toList
+
+-- | Paths go between simple types.
+allPathKeys :: (DsMonad m, MonadReader TypeGraph m) => m (Map TGVSimple (Set TGVSimple))
+allPathKeys = do
+  gs <- view gsimple
+  allPathStarts >>= return . Map.fromList . List.map (\x -> (x, Set.fromList (reachable' gs x))) . Set.toList . Set.map simpleVertex
 
 reachableFrom :: forall m. (DsMonad m, MonadReader TypeGraph m) => TGV -> m (Set TGV)
 reachableFrom v = do
@@ -167,19 +150,6 @@ goalReachableSimple' gkey key0 = isReachable (simpleVertex gkey) (simpleVertex k
 
 isReachable :: TypeGraphVertex key => key -> key -> (Graph, Vertex -> ((), key, [key]), key -> Maybe Vertex) -> Bool
 isReachable gkey key0 (g, _vf, kf) = path g (fromJust $ kf key0) (fromJust $ kf gkey)
-
-#if 0
-  es <- view edges
-  let Just v0 = 
-      Just vf = 
-  return $ 
-  case kf key0 of
-    Nothing -> error ("isReachable - unknown key: " ++ pprint' key0)
-    Just key -> do
-      let gvert = fromMaybe (error $ "Unknown goal type: " ++ pprint' gkey ++ "\n" ++ intercalate "\n  " ("known:" : List.map pprint' (Map.keys es))) (kf gkey)
-      -- Can we reach any node whose type matches (ConT gname)?  Fields don't matter.
-      return $ path g key gvert
-#endif
 
 -- | Return the TGV associated with a particular type,
 -- with no field specified.
@@ -236,7 +206,7 @@ typeGraphEdges' augment types = do
       doNode v = do
         s <- lift $ getSet
         when (not (member v s)) $
-             do lift $ modifySet (insert v)
+             do lift $ modifySet (Set.insert v)
                 doNode' v
       doNode' :: TGV -> StateT (GraphEdges () TGV) m ()
       doNode' typ = do
