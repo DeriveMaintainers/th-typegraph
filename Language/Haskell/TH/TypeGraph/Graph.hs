@@ -1,7 +1,5 @@
 -- | Abstract operations on Maps containing graph edges.
 
--- FIXME: the sense of the predicates are kinda mixed up here
-
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -14,7 +12,6 @@
 
 module Language.Haskell.TH.TypeGraph.Graph
     ( TypeGraph, typeInfo, edges, graph, gsimple
-    , TypeGraph(TypeGraph, _typeInfo, _edges, _graph, _gsimple, _stack) -- temporary
     , graphFromMap
 
     , allLensKeys
@@ -42,7 +39,6 @@ import Control.Applicative
 #endif
 import Control.Lens -- (makeLenses, over, view)
 import Control.Monad (when)
-import Control.Monad as List (filterM)
 import Control.Monad.Reader (ask, local, MonadReader, ReaderT, runReaderT)
 import Control.Monad.State (execStateT, modify, StateT)
 import Control.Monad.Trans (lift)
@@ -50,10 +46,10 @@ import Data.Default (Default(def))
 import Data.Foldable as Foldable
 import Data.Graph hiding (edges)
 import Data.List as List (map)
-import Data.Map as Map (alter, fromList, fromListWith, insert, Map, update)
+import Data.Map as Map (alter, fromList, fromListWith, Map, update)
 import qualified Data.Map as Map (toList)
 import Data.Maybe (fromJust, mapMaybe)
-import Data.Set.Extra as Set (empty, flatten, filterM, foldr, fromList, insert, map, mapM, member, Set, singleton, toList, union, unions)
+import Data.Set.Extra as Set (empty, fromList, insert, map, member, Set, singleton, toList, union, unions)
 import Data.Traversable as Traversable
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
@@ -76,18 +72,18 @@ instance Ppr Vertex where
 -- from a type to one of the types it contains.  Thus, each edge
 -- represents a primitive lens, and each path in the graph is a
 -- composition of lenses.
-graphFromMap :: forall node key. (Ord key) =>
-                GraphEdges node key -> (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex)
+graphFromMap :: forall key. (Ord key) =>
+                GraphEdges key -> (Graph, Vertex -> ((), key, [key]), key -> Maybe Vertex)
 graphFromMap mp =
     graphFromEdges triples
     where
-      triples :: [(node, key, [key])]
-      triples = List.map (\ (k, (node, ks)) -> (node, k, Foldable.toList ks)) $ Map.toList mp
+      triples :: [((), key, [key])]
+      triples = List.map (\ (k, ks) -> ((), k, Foldable.toList ks)) $ Map.toList mp
 
 data TypeGraph
     = TypeGraph
       { _typeInfo :: TypeInfo
-      , _edges :: GraphEdges () TGV
+      , _edges :: GraphEdges TGV
       , _graph :: (Graph, Vertex -> ((), TGV, [TGV]), TGV -> Maybe Vertex)
       , _gsimple :: (Graph, Vertex -> ((), TGVSimple, [TGVSimple]), TGVSimple -> Maybe Vertex)
       , _stack :: [StackElement] -- this is the only type that isn't available in th-typegraph
@@ -180,7 +176,7 @@ data VertexStatus typ
 instance Default (VertexStatus typ) where
     def = Vertex
 
---- type Edges = GraphEdges () TGV
+--- type Edges = GraphEdges TGV
 
 -- | Return the set of edges implied by the subtype relationship among
 -- a set of types.  This is just the nodes of the type graph.  The
@@ -199,27 +195,27 @@ typeGraphEdges'
            -- lens returned by @View's@ method to convert between @a@
            -- and @b@ (i.e. to implement the edge in the type graph.)
     -> [Type]
-    -> m (GraphEdges () TGV)
+    -> m (GraphEdges TGV)
 typeGraphEdges' augment types = do
-  execStateT (mapM_ (\typ -> typeGraphVertex typ >>= doNode) types) (mempty :: GraphEdges () TGV)
+  execStateT (mapM_ (\typ -> typeGraphVertex typ >>= doNode) types) (mempty :: GraphEdges TGV)
     where
       doNode v = do
         s <- lift $ getSet
         when (not (member v s)) $
              do lift $ modifySet (Set.insert v)
                 doNode' v
-      doNode' :: TGV -> StateT (GraphEdges () TGV) m ()
+      doNode' :: TGV -> StateT (GraphEdges TGV) m ()
       doNode' typ = do
         addNode typ
         vs <- lift $ augment typ
         mapM_ (addEdge typ) (Set.toList vs)
         mapM_ doNode (Set.toList vs)
 
-      addNode :: TGV -> StateT (GraphEdges () TGV) m ()
-      addNode a = modify $ Map.alter (maybe (Just (def, Set.empty)) Just) a
+      addNode :: TGV -> StateT (GraphEdges TGV) m ()
+      addNode a = modify $ Map.alter (maybe (Just Set.empty) Just) a
 
-      addEdge :: TGV -> TGV -> StateT (GraphEdges () TGV) m ()
-      addEdge a b = modify $ Map.update (\(lbl, s) -> Just (lbl, Set.insert b s)) a
+      addEdge :: TGV -> TGV -> StateT (GraphEdges TGV) m ()
+      addEdge a b = modify $ Map.update (\s -> Just (Set.insert b s)) a
 
 -- | Return the set of adjacent vertices according to the default type
 -- graph - i.e. the one determined only by the type definitions, not
@@ -255,10 +251,9 @@ adjacent typ =
       doField tname _dec cname (fld, ftype) = Set.singleton <$> typeGraphVertexOfField (tname, cname, fld) ftype
 
 -- FIXME: pass in ti, pass in makeTypeGraphEdges, remove Q, move to TypeGraph.Graph
-makeTypeGraph :: (DsMonad m) => ReaderT TypeInfo m (GraphEdges () TGV) -> TypeInfo -> m TypeGraph
-makeTypeGraph makeTypeGraphEdges ti = do
-  -- ti <- typeInfo st
-  es <- runReaderT makeTypeGraphEdges ti
+makeTypeGraph :: MonadReader TypeInfo m => (GraphEdges TGV) -> m TypeGraph
+makeTypeGraph es = do
+  ti <- ask
   return $ TypeGraph
              { _typeInfo = ti
              , _edges = es

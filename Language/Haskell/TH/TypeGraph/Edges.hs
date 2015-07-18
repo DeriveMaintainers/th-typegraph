@@ -35,13 +35,11 @@ import Control.Lens -- (makeLenses, view)
 import Control.Monad (filterM)
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.State (execStateT, modify, StateT)
-import Data.Default (Default(def))
 import Data.Foldable
 import Data.List as List (filter, intercalate, map)
 import Data.Map as Map ((!), alter, delete, filterWithKey, fromList, keys, lookup, map, Map, mapKeysWith, mapWithKey)
 import qualified Data.Map as Map (toList)
 import Data.Maybe (mapMaybe)
-import Data.Monoid ((<>))
 import Data.Set as Set (delete, empty, filter, insert, map, member, fromList, Set, singleton, toList, union)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
@@ -54,18 +52,18 @@ import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Prelude hiding (foldr, mapM_, null)
 
-type GraphEdges node key = Map key (node, Set key)
+type GraphEdges key = Map key (Set key)
 
 -- | Given the discovered set of types and maps of type synonyms and
 -- fields, build and return the GraphEdges relation on TypeGraphVertex.
 -- This is not a recursive function, it stops when it reaches the field
 -- types.
-typeGraphEdges :: forall node m. (DsMonad m, Functor m, Default node, MonadReader TypeInfo m) =>
-                  m (GraphEdges node TGV)
+typeGraphEdges :: forall m. (DsMonad m, Functor m, MonadReader TypeInfo m) =>
+                  m (GraphEdges TGV)
 typeGraphEdges = do
   execStateT (view typeSet >>= mapM_ (\t -> expandType t >>= doType)) mempty
     where
-      doType :: E Type -> StateT (GraphEdges node TGV) m ()
+      doType :: E Type -> StateT (GraphEdges TGV) m ()
       doType typ = do
         vs <- allVertices Nothing typ
         mapM_ node vs
@@ -80,25 +78,25 @@ typeGraphEdges = do
             doType (E typ2)
           _ -> return ()
 
-      doInfo :: Set TGV -> Info -> StateT (GraphEdges node TGV) m ()
+      doInfo :: Set TGV -> Info -> StateT (GraphEdges TGV) m ()
       doInfo vs (TyConI dec) = doDec vs dec
       -- doInfo vs (PrimTyConI tname _ _) = return ()
       doInfo _ _ = return ()
 
-      doDec :: Set TGV -> Dec -> StateT (GraphEdges node TGV) m ()
+      doDec :: Set TGV -> Dec -> StateT (GraphEdges TGV) m ()
       doDec _ (TySynD _ _ _) = return () -- This type will be in typeSet
       doDec vs (NewtypeD _ tname _ constr _) = doCon vs tname constr
       doDec vs (DataD _ tname _ constrs _) = mapM_ (doCon vs tname) constrs
       doDec _ _ = return ()
 
-      doCon :: Set TGV -> Name -> Con -> StateT (GraphEdges node TGV) m ()
+      doCon :: Set TGV -> Name -> Con -> StateT (GraphEdges TGV) m ()
       doCon vs tname (ForallC _ _ con) = doCon vs tname con
       doCon vs tname (NormalC cname flds) = mapM_ (uncurry (doField vs tname cname)) (List.map (\ (n, (_, ftype)) -> (Left n, ftype)) (zip [1..] flds))
       doCon vs tname (RecC cname flds) = mapM_ (uncurry (doField vs tname cname)) (List.map (\ (fname, _, ftype) -> (Right fname, ftype)) flds)
       doCon vs tname (InfixC (_, lhs) cname (_, rhs)) = doField vs tname cname (Left 1) lhs >> doField vs tname cname (Left 2) rhs
 
       -- Connect the vertex for this record type to one particular field vertex
-      doField ::  DsMonad m => Set TGV -> Name -> Name -> Either Int Name -> Type -> StateT (GraphEdges node TGV) m ()
+      doField ::  DsMonad m => Set TGV -> Name -> Name -> Either Int Name -> Type -> StateT (GraphEdges TGV) m ()
       doField vs tname cname fld ftyp = do
         v2 <- expandType ftyp >>= fieldVertex (tname, cname, fld)
         v3 <- expandType ftyp >>= typeVertex'
@@ -107,64 +105,64 @@ typeGraphEdges = do
         -- Here's where we don't recurse, see?
         -- doVertex v2
 
-      node :: TGV -> StateT (GraphEdges node TGV) m ()
+      node :: TGV -> StateT (GraphEdges TGV) m ()
       -- node v = pass (return ((), (Map.alter (Just . maybe (def, Set.empty) id) v)))
-      node v = modify (Map.alter (Just . maybe (def, Set.empty) id) v)
+      node v = modify (Map.alter (Just . maybe (Set.empty) id) v)
 
-      edge :: TGV -> TGV -> StateT (GraphEdges node TGV) m ()
+      edge :: TGV -> TGV -> StateT (GraphEdges TGV) m ()
       edge v1 v2 = node v2 >> modify f
-          where f :: GraphEdges node TGV -> GraphEdges node TGV
+          where f :: GraphEdges TGV -> GraphEdges TGV
                 f = Map.alter g v1
-                g :: (Maybe (node, Set TGV) -> Maybe (node, Set TGV))
-                g = Just . maybe (def, singleton v2) (over _2 (Set.insert v2))
+                g :: (Maybe (Set TGV) -> Maybe (Set TGV))
+                g = Just . maybe (singleton v2) (Set.insert v2)
 
-instance Ppr key => Ppr (GraphEdges node key) where
+instance Ppr key => Ppr (GraphEdges key) where
     ppr x =
         ptext $ intercalate "\n  " $
           "edges:" : (List.map
-                       (\(k, (_, ks)) -> intercalate "\n    " ((pprint' k ++ " ->" ++ if null ks then " []" else "") : List.map pprint' (Set.toList ks)))
+                       (\(k, ks) -> intercalate "\n    " ((pprint' k ++ " ->" ++ if null ks then " []" else "") : List.map pprint' (Set.toList ks)))
                        (Map.toList x))
 
 -- | Isolate and remove matching nodes
-cut :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges node a -> GraphEdges node a
+cut :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges a -> GraphEdges a
 cut p edges = Map.filterWithKey (\v _ -> not (p v)) (isolate p edges)
 
 -- | Monadic predicate version of 'cut'.
-cutM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
+cutM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges a -> m (GraphEdges a)
 cutM victim edges = do
   victims <- Set.fromList <$> filterM victim (Map.keys edges)
   return $ cut (flip Set.member victims) edges
 
-cutEdges :: (Eq a, Ord a) => (a -> a -> Bool) -> GraphEdges node a -> (GraphEdges node a)
-cutEdges p edges = Map.mapWithKey (\key (hint, gkeys) -> (hint, Set.filter (\gkey -> not (p key gkey)) gkeys)) edges
+cutEdges :: (Eq a, Ord a) => (a -> a -> Bool) -> GraphEdges a -> (GraphEdges a)
+cutEdges p edges = Map.mapWithKey (\key gkeys -> Set.filter (\gkey -> not (p key gkey)) gkeys) edges
 
-cutEdgesM :: (Monad m, Eq a, Ord a) => (a -> a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
+cutEdgesM :: (Monad m, Eq a, Ord a) => (a -> a -> m Bool) -> GraphEdges a -> m (GraphEdges a)
 cutEdgesM p edges = do
   let pairs = Map.toList edges
-  ss <- mapM (\(a, (_, s)) -> filterM (\b -> not <$> p a b) (Set.toList s)) pairs
-  let pairs' = List.map (\ ((a, (h, _)), s') -> (a, (h, Set.fromList s'))) (zip pairs ss)
+  ss <- mapM (\(a, s) -> filterM (\b -> not <$> p a b) (Set.toList s)) pairs
+  let pairs' = List.map (\ ((a, _), s') -> (a, Set.fromList s')) (zip pairs ss)
   return $ Map.fromList pairs'
 
 -- | Remove all the in- and out-edges of matching nodes
-isolate :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges node a -> GraphEdges node a
+isolate :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges a -> GraphEdges a
 isolate p edges = cutEdges (\ a b -> p a || p b) edges
 
 -- | Monadic predicate version of 'isolate'.
-isolateM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
+isolateM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges a -> m (GraphEdges a)
 isolateM victim edges = do
   victims <- Set.fromList <$> filterM victim (Map.keys edges)
   return $ isolate (flip Set.member victims) edges
 
 -- | Replace the out set of selected nodes
-link :: (Eq a, Ord a) => (a -> Maybe (Set a)) -> GraphEdges node a -> GraphEdges node a
+link :: (Eq a, Ord a) => (a -> Maybe (Set a)) -> GraphEdges a -> GraphEdges a
 link f edges =
     foldr link1 edges (List.map (\a -> (a, f a)) (Map.keys edges))
     where
-      link1 :: (Eq a, Ord a) => (a, Maybe (Set a)) -> GraphEdges node a -> GraphEdges node a
+      link1 :: (Eq a, Ord a) => (a, Maybe (Set a)) -> GraphEdges a -> GraphEdges a
       link1 (_, Nothing) edges' = edges'
-      link1 (a, Just s) edges' = Map.alter (\(Just (node, _)) -> Just (node, s)) a edges'
+      link1 (a, Just s) edges' = Map.alter (\(Just _) -> Just s) a edges'
 
-linkM :: (Eq a, Ord a, Monad m) => (a -> m (Maybe (Set a))) -> GraphEdges node a -> m (GraphEdges node a)
+linkM :: (Eq a, Ord a, Monad m) => (a -> m (Maybe (Set a))) -> GraphEdges a -> m (GraphEdges a)
 linkM f edges = do
   let ks = Map.keys edges
   mss <- mapM f ks
@@ -173,18 +171,18 @@ linkM f edges = do
 
 -- | Remove matching nodes and extend each of their in-edges to each of
 -- their out-edges.
-dissolve :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges node a -> GraphEdges node a
+dissolve :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges a -> GraphEdges a
 dissolve p edges =
     foldr dissolve1 edges (List.filter p (Map.keys edges))
     where
       -- Remove a victim and call dissolve1' to extend the edges of each
       -- node that had it in its out set.
-      dissolve1 v es = maybe es (\(_, s) -> dissolve1' v (Set.delete v s) (Map.delete v es)) (Map.lookup v es)
+      dissolve1 v es = maybe es (\s -> dissolve1' v (Set.delete v s) (Map.delete v es)) (Map.lookup v es)
       -- If a node's out edges include the victim replace them with next.
-      dissolve1' v vs es = Map.map (\(h, s) -> (h, if Set.member v s then Set.union vs (Set.delete v s) else s)) es
+      dissolve1' v vs es = Map.map (\s -> if Set.member v s then Set.union vs (Set.delete v s) else s) es
 
 -- | Monadic predicate version of 'dissolve'.
-dissolveM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges node a -> m (GraphEdges node a)
+dissolveM :: (Functor m, Monad m, Eq a, Ord a) => (a -> m Bool) -> GraphEdges a -> m (GraphEdges a)
 dissolveM victim edges = do
   victims <- Set.fromList <$> filterM victim (Map.keys edges)
   return $ dissolve (flip Set.member victims) edges
@@ -192,9 +190,7 @@ dissolveM victim edges = do
 -- | Simplify a graph by throwing away the field information in each
 -- node.  This means the nodes only contain the fully expanded Type
 -- value (and any type synonyms.)
-simpleEdges :: Monoid node => GraphEdges node TGV -> GraphEdges node TGVSimple
-simpleEdges = Map.mapWithKey (\v (n, s) -> (n, Set.delete v s)) .    -- delete any self edges
-              Map.mapKeysWith combine simpleVertex .   -- simplify each vertex
-              Map.map (over _2 (Set.map simpleVertex)) -- simplify the out edges
-    where
-      combine (n1, s1) (n2, s2) = (n1 <> n2, Set.union s1 s2)
+simpleEdges :: GraphEdges TGV -> GraphEdges TGVSimple
+simpleEdges = Map.mapWithKey (\v s -> (Set.delete v s)) .    -- delete any self edges
+              Map.mapKeysWith Set.union simpleVertex .   -- simplify each vertex
+              Map.map (Set.map simpleVertex) -- simplify the out edges

@@ -17,7 +17,7 @@ import Language.Haskell.TH.TypeGraph.Edges (dissolveM, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Expand (expandType, runExpanded, E(E))
 import Language.Haskell.TH.TypeGraph.Free (freeTypeVars, typeArity)
 import Language.Haskell.TH.TypeGraph.Info (makeTypeInfo, synonyms, typeVertex')
-import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..), TGV(..), TGVSimple(..), etype, field, vsimple, syns)
+import Language.Haskell.TH.TypeGraph.Vertex (TGV(..), TGVSimple(..), etype)
 import Language.Haskell.TH.Desugar (withLocalDeclarations)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax

@@ -52,10 +52,10 @@ pprintVertex = pprint'
 pprintPred :: E Pred -> String
 pprintPred = pprint' . unReify . runExpanded
 
-edgesToStrings :: (TypeGraphVertex v, Ppr v) => GraphEdges label v -> [(String, [String])]
-edgesToStrings mp = List.map (\ (t, (_, s)) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
+edgesToStrings :: (TypeGraphVertex v, Ppr v) => GraphEdges v -> [(String, [String])]
+edgesToStrings mp = List.map (\ (t, s) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
 
-typeGraphEdges' :: forall m. (DsMonad m, MonadReader TypeInfo m) => m (GraphEdges () TGV)
+typeGraphEdges' :: forall m. (DsMonad m, MonadReader TypeInfo m) => m (GraphEdges TGV)
 typeGraphEdges' = typeGraphEdges
 
 -- | Return a mapping from vertex to all the known type synonyms for
@@ -66,7 +66,7 @@ typeSynonymMap =
      (Map.filter (not . Set.null) .
       Map.fromList .
       List.map (\node -> (node, view (vsimple . syns) node)) .
-      Map.keys) <$> (typeGraphEdges :: m (GraphEdges () TGV))
+      Map.keys) <$> (typeGraphEdges :: m (GraphEdges TGV))
 
 -- | Like 'typeSynonymMap', but with all field information removed.
 typeSynonymMapSimple :: forall m. (DsMonad m, MonadReader TypeInfo m) =>
