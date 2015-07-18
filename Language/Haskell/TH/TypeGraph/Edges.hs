@@ -47,7 +47,7 @@ import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Info (TypeInfo, infoMap, typeSet, allVertices, fieldVertex, typeVertex')
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
-import Language.Haskell.TH.TypeGraph.Vertex (simpleVertex, TGV, TGVSimple)
+import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, vsimple)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Prelude hiding (foldr, mapM_, null)
@@ -192,5 +192,5 @@ dissolveM victim edges = do
 -- value (and any type synonyms.)
 simpleEdges :: GraphEdges TGV -> GraphEdges TGVSimple
 simpleEdges = Map.mapWithKey (\v s -> (Set.delete v s)) .    -- delete any self edges
-              Map.mapKeysWith Set.union simpleVertex .   -- simplify each vertex
-              Map.map (Set.map simpleVertex) -- simplify the out edges
+              Map.mapKeysWith Set.union (view vsimple) .   -- simplify each vertex
+              Map.map (Set.map (view vsimple)) -- simplify the out edges

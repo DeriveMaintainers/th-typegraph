@@ -62,7 +62,7 @@ import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Info (startTypes, TypeInfo, typeVertex', fieldVertex)
 import Language.Haskell.TH.TypeGraph.Prelude (HasSet(getSet, modifySet), adjacent', reachable')
 import Language.Haskell.TH.TypeGraph.Stack (HasStack(withStack, push), StackElement(StackElement))
-import Language.Haskell.TH.TypeGraph.Vertex (simpleVertex, TGV, TGVSimple, vsimple, TypeGraphVertex, etype)
+import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, vsimple, TypeGraphVertex, etype)
 import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or)
 
 instance Ppr Vertex where
@@ -110,13 +110,13 @@ allLensKeys ::  (DsMonad m, MonadReader TypeGraph m) => m (Map TGVSimple (Set TG
 allLensKeys = do
   g <- view graph
   gs <- view gsimple
-  allPathStarts >>= return . Map.fromListWith Set.union . List.map (\x -> (simpleVertex x, Set.fromList (adjacent' g x))) . Set.toList
+  allPathStarts >>= return . Map.fromListWith Set.union . List.map (\x -> (view vsimple x, Set.fromList (adjacent' g x))) . Set.toList
 
 -- | Paths go between simple types.
 allPathKeys :: (DsMonad m, MonadReader TypeGraph m) => m (Map TGVSimple (Set TGVSimple))
 allPathKeys = do
   gs <- view gsimple
-  allPathStarts >>= return . Map.fromList . List.map (\x -> (x, Set.fromList (reachable' gs x))) . Set.toList . Set.map simpleVertex
+  allPathStarts >>= return . Map.fromList . List.map (\x -> (x, Set.fromList (reachable' gs x))) . Set.toList . Set.map (view vsimple)
 
 reachableFrom :: forall m. (DsMonad m, MonadReader TypeGraph m) => TGV -> m (Set TGV)
 reachableFrom v = do
@@ -142,7 +142,7 @@ goalReachableSimple :: (Functor m, DsMonad m, MonadReader TypeGraph m) => TGVSim
 goalReachableSimple gkey key0 = isReachable gkey key0 <$> view gsimple
 
 goalReachableSimple' :: (Functor m, DsMonad m, MonadReader TypeGraph m) => TGV -> TGV -> m Bool
-goalReachableSimple' gkey key0 = isReachable (simpleVertex gkey) (simpleVertex key0) <$> view gsimple
+goalReachableSimple' gkey key0 = isReachable (view vsimple gkey) (view vsimple key0) <$> view gsimple
 
 isReachable :: TypeGraphVertex key => key -> key -> (Graph, Vertex -> ((), key, [key]), key -> Maybe Vertex) -> Bool
 isReachable gkey key0 (g, _vf, kf) = path g (fromJust $ kf key0) (fromJust $ kf gkey)
