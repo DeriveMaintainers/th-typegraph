@@ -28,15 +28,17 @@ import Data.Monoid (mempty)
 import Control.Lens -- (makeLenses, view)
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.State (execStateT, StateT)
+import Control.Monad.Trans as Monad (lift)
+import Data.Foldable as Foldable (mapM_)
 import Data.List as List (intercalate, map)
 import Data.Map as Map (findWithDefault, insert, insertWith, Map, toList)
-import Data.Set as Set (empty, insert, map, member, Set, singleton, toList, union)
+import Data.Set.Extra as Set (empty, insert, map, mapM_, member, Set, singleton, toList, union)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext)
-import Language.Haskell.TH.Syntax (Lift(lift), Quasi(..))
+import Language.Haskell.TH.Syntax as TH (Lift(lift), Quasi(..))
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
 import Language.Haskell.TH.TypeGraph.Shape (Field)
@@ -75,22 +77,25 @@ $(makeLenses ''TypeInfo)
 
 instance Lift TypeInfo where
     lift (TypeInfo {_startTypes = st, _typeSet = t, _infoMap = i, _expanded = e, _synonyms = s, _fields = f}) =
-        [| TypeInfo { _startTypes = $(lift st)
-                    , _typeSet = $(lift t)
-                    , _infoMap = $(lift i)
-                    , _expanded = $(lift e)
-                    , _synonyms = $(lift s)
-                    , _fields = $(lift f)
+        [| TypeInfo { _startTypes = $(TH.lift st)
+                    , _typeSet = $(TH.lift t)
+                    , _infoMap = $(TH.lift i)
+                    , _expanded = $(TH.lift e)
+                    , _synonyms = $(TH.lift s)
+                    , _fields = $(TH.lift f)
                     } |]
 
 -- | Collect the graph information for one type and all the types
 -- reachable from it.
-collectTypeInfo :: forall m. DsMonad m => Type -> StateT TypeInfo m ()
-collectTypeInfo typ0 = do
+collectTypeInfo :: forall m. DsMonad m => (Type -> m (Set Type)) -> Type -> StateT TypeInfo m ()
+collectTypeInfo extraTypes typ0 = do
   doType typ0
     where
       doType :: Type -> StateT TypeInfo m ()
-      doType typ = do
+      doType typ = Monad.lift (extraTypes typ) >>= Set.mapM_ doType' . Set.insert typ
+
+      doType' :: Type -> StateT TypeInfo m ()
+      doType' typ = do
         (s :: Set Type) <- use typeSet
         case Set.member typ s of
           True -> return ()
@@ -98,18 +103,18 @@ collectTypeInfo typ0 = do
                       etyp{-@(E etyp')-} <- expandType typ
                       expanded %= Map.insert typ etyp
                       -- expanded %= Map.insert etyp' etyp -- A type is its own expansion, but we shouldn't need this
-                      doType' typ
+                      doType'' typ
 
-      doType' :: Type -> StateT TypeInfo m ()
-      doType' (ConT name) = do
+      doType'' :: Type -> StateT TypeInfo m ()
+      doType'' (ConT name) = do
         info <- qReify name
         infoMap %= Map.insert name info
         doInfo name info
-      doType' (AppT typ1 typ2) = doType typ1 >> doType typ2
-      doType' ListT = return ()
-      doType' (VarT _) = return ()
-      doType' (TupleT _) = return ()
-      doType' typ = error $ "makeTypeInfo: " ++ pprint' typ
+      doType'' (AppT typ1 typ2) = doType typ1 >> doType typ2
+      doType'' ListT = return ()
+      doType'' (VarT _) = return ()
+      doType'' (TupleT _) = return ()
+      doType'' typ = error $ "makeTypeInfo: " ++ pprint' typ
 
       doInfo :: Name -> Info -> StateT TypeInfo m ()
       doInfo _tname (TyConI dec) = doDec dec
@@ -123,14 +128,14 @@ collectTypeInfo typ0 = do
         synonyms %= Map.insertWith union etyp (singleton tname)
         doType typ
       doDec (NewtypeD _ tname _ constr _) = doCon tname constr
-      doDec (DataD _ tname _ constrs _) = mapM_ (doCon tname) constrs
+      doDec (DataD _ tname _ constrs _) = Foldable.mapM_ (doCon tname) constrs
       doDec dec = error $ "makeTypeInfo: " ++ pprint' dec
 
       doCon :: Name -> Con -> StateT TypeInfo m ()
       doCon tname (ForallC _ _ con) = doCon tname con
-      doCon tname (NormalC cname flds) = mapM_ doField (zip (List.map (\n -> (tname, cname, Left n)) ([1..] :: [Int])) (List.map snd flds))
-      doCon tname (RecC cname flds) = mapM_ doField (List.map (\ (fname, _, ftype) -> ((tname, cname, Right fname), ftype)) flds)
-      doCon tname (InfixC (_, lhs) cname (_, rhs)) = mapM_ doField [((tname, cname, Left 1), lhs), ((tname, cname, Left 2), rhs)]
+      doCon tname (NormalC cname flds) = Foldable.mapM_ doField (zip (List.map (\n -> (tname, cname, Left n)) ([1..] :: [Int])) (List.map snd flds))
+      doCon tname (RecC cname flds) = Foldable.mapM_ doField (List.map (\ (fname, _, ftype) -> ((tname, cname, Right fname), ftype)) flds)
+      doCon tname (InfixC (_, lhs) cname (_, rhs)) = Foldable.mapM_ doField [((tname, cname, Left 1), lhs), ((tname, cname, Left 2), rhs)]
 
       doField :: ((Name, Name, Either Int Name), Type) -> StateT TypeInfo m ()
       doField (fld, ftyp) = do
@@ -139,10 +144,10 @@ collectTypeInfo typ0 = do
         doType ftyp
 
 -- | Build a TypeInfo value by scanning the supplied types
-makeTypeInfo :: forall m. DsMonad m => [Type] -> m TypeInfo
-makeTypeInfo types =
+makeTypeInfo :: forall m. DsMonad m => (Type -> m (Set Type)) -> [Type] -> m TypeInfo
+makeTypeInfo extraTypes types =
     execStateT
-      (mapM_ collectTypeInfo types)
+      (Foldable.mapM_ (collectTypeInfo extraTypes) types)
       (TypeInfo { _startTypes = types
                 , _typeSet = mempty
                 , _infoMap = mempty

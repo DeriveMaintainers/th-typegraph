@@ -38,6 +38,7 @@ import Data.Generics (Data, Typeable)
 import Data.Map as Map (keys)
 import Data.Maybe (fromMaybe)
 import Data.Monoid
+import Data.Set (Set)
 import Debug.Trace (trace)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
@@ -165,9 +166,9 @@ fieldLens e@(StackElement fld con _) =
 -- The only reason for this function is backwards compatibility, the
 -- fields should be changed so they begin with _ and the regular
 -- makeLenses should be used.
-makeLenses' :: [Name] -> Q [Dec]
-makeLenses' typeNames =
-    execWriterT $ execStackT $ makeTypeInfo st >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges TGV) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
+makeLenses' :: (Type -> Q (Set Type)) -> [Name] -> Q [Dec]
+makeLenses' extraTypes typeNames =
+    execWriterT $ execStackT $ makeTypeInfo (lift . lift . extraTypes) st >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges TGV) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
     where
       st = map ConT typeNames
 
