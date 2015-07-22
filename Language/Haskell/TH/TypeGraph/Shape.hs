@@ -9,6 +9,7 @@ module Language.Haskell.TH.TypeGraph.Shape
       Field
     , constructorFields
     , FieldType(..)
+    , fieldType
     , constructorFieldTypes
     , fPos
     , fName
@@ -54,6 +55,10 @@ instance Ppr (Maybe Field, Type) where
     ppr (mf, typ) = ptext $ pprint typ ++ " (unexpanded)" ++ maybe "" (\fld -> " (field " ++ pprint fld ++ ")") mf
 
 data FieldType = Positional Int StrictType | Named VarStrictType deriving (Eq, Ord, Show, Data, Typeable)
+
+fieldType :: FieldType -> Type
+fieldType (Positional _ (_, ftype)) = ftype
+fieldType (Named (_, _, ftype)) = ftype
 
 instance Ppr FieldType where
     ppr (Positional x _) = ptext $ show x
