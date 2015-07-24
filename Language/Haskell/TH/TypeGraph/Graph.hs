@@ -11,7 +11,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Language.Haskell.TH.TypeGraph.Graph
-    ( TypeGraph, typeInfo, edges, graph, gsimple
+    ( TypeGraph, typeInfo, edges, graph, gsimple, stack
     , graphFromMap
 
     , allLensKeys
