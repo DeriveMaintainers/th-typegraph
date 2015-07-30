@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -15,20 +16,27 @@ module Language.Haskell.TH.TypeGraph.Prelude
     , unReifyName
     , adjacent'
     , reachable'
+    , L(L)
     ) where
 
 import Control.Lens
 import Data.Generics (Data, everywhere, mkT)
 import Data.Graph as Graph
+import Data.List (intersperse)
 import Data.Map as Map (Map, fromList, toList)
 import Data.Maybe (fromMaybe)
 import Data.Set as Set (fromList, Set, toList)
 import Language.Haskell.TH
-import Language.Haskell.TH.PprLib (ptext)
+import Language.Haskell.TH.PprLib (ptext, hcat)
 import Language.Haskell.TH.Syntax (Lift(lift), Quasi(qReify))
 
 instance Ppr () where
     ppr () = ptext "()"
+
+newtype L a = L a
+
+instance Ppr a => Ppr (L [a]) where
+    ppr (L l) = hcat ([ptext "["] ++ intersperse (ptext ", ") (map ppr l) ++ [ptext "]"])
 
 -- | Pretty print a 'Ppr' value on a single line with each block of
 -- white space (newlines, tabs, etc.) converted to a single space.
