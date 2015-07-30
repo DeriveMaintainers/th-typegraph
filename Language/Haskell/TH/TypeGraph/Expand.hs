@@ -33,12 +33,23 @@ module Language.Haskell.TH.TypeGraph.Expand
 #if __GLASGOW_HASKELL__ < 709
 import Control.Applicative
 #endif
+import Data.Function.Memoize (deriveMemoizable, memoize)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar as DS (DsMonad, dsType, expand, typeToTH)
 import Language.Haskell.TH.Instances ()
-import Language.Haskell.TH.Syntax (Lift(lift))
+import Language.Haskell.TH.Syntax -- (Lift(lift))
 import Prelude hiding (pred)
+
+$(deriveMemoizable ''Type)
+$(deriveMemoizable ''Name)
+$(deriveMemoizable ''TyLit)
+$(deriveMemoizable ''NameFlavour)
+$(deriveMemoizable ''OccName)
+$(deriveMemoizable ''NameSpace)
+$(deriveMemoizable ''TyVarBndr)
+$(deriveMemoizable ''ModName)
+$(deriveMemoizable ''PkgName)
 
 -- | This class lets us use the same expand* functions to work with
 -- specially marked expanded types or with the original types.
@@ -48,7 +59,7 @@ class Expanded un ex | ex -> un where
 
 -- | Apply the th-desugar expand function to a 'Type' and mark it as expanded.
 expandType :: (DsMonad m, Expanded Type e)  => Type -> m e
-expandType typ = markExpanded <$> DS.typeToTH <$> (DS.dsType typ >>= DS.expand)
+expandType = memoize $ \typ -> markExpanded <$> DS.typeToTH <$> (DS.dsType typ >>= DS.expand)
 
 -- | Apply the th-desugar expand function to a 'Pred' and mark it as expanded.
 -- Note that the definition of 'Pred' changed in template-haskell-2.10.0.0.
