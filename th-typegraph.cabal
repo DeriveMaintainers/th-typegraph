@@ -1,5 +1,5 @@
 name:               th-typegraph
-version:            0.22
+version:            0.23
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
