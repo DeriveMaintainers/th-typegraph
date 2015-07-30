@@ -13,6 +13,7 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.TH.TypeGraph.Stack
     ( HasStack(push, withStack)
+    , Wrapper(Wrapper), unwrap
     , StackElement(..)
     , prettyStack
     , foldField
@@ -27,7 +28,7 @@ module Language.Haskell.TH.TypeGraph.Stack
 
 import Control.Applicative
 import Control.Category ((.))
-import Control.Lens (iso, Lens', lens, set, view)
+import Control.Lens (iso, Lens', lens, makeLenses, set, view)
 import Control.Monad.Reader (ReaderT, runReaderT, ask, local)
 import Control.Monad.RWS (RWST)
 import Control.Monad.State (StateT, evalStateT, get)
@@ -72,6 +73,20 @@ instance HasStack m => HasStack (StateT s m) where
 instance Quasi m => HasStack (ReaderT [StackElement] m) where
     withStack f = ask >>= f
     push fld con dec action = local (\ stk -> StackElement fld con dec : stk) action
+
+-- We can't write @HasStack (ReaderT a m)@ because it overlaps with
+-- @HasStack (ReaderT [StackElement] m)@.  However, we can write
+-- @HasStack (ReaderT (Wrapper a) m@.
+instance HasStack m => HasStack (ReaderT (Wrapper a) m) where
+    withStack f = lift (withStack return) >>= f
+    push fld con dec action =
+        do r <- ask
+           a <- lift $ push fld con dec (runReaderT action r)
+           return a
+
+newtype Wrapper a = Wrapper {_unwrap :: a}
+
+$(makeLenses ''Wrapper)
 
 instance (HasStack m, Monoid w) => HasStack (WriterT w m) where
     withStack f = lift (withStack return) >>= f

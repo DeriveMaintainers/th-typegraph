@@ -86,7 +86,7 @@ data TypeGraph
       , _edges :: GraphEdges TGV
       , _graph :: (Graph, Vertex -> ((), TGV, [TGV]), TGV -> Maybe Vertex)
       , _gsimple :: (Graph, Vertex -> ((), TGVSimple, [TGVSimple]), TGVSimple -> Maybe Vertex)
-      , _stack :: [StackElement] -- this is the only type that isn't available in th-typegraph
+      , _stack :: [StackElement]
       }
 
 $(makeLenses ''TypeGraph)
