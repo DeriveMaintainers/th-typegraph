@@ -22,13 +22,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Language.Haskell.TH.TypeGraph.Expand
-    ( expandType
+    ( E(E, unE)
+    , ExpandMap
+    , expandType
     , expandPred
     , expandClassP
-    , E(E, unE)
-    -- * Memoization
-    , getExpansion
-    , putExpansion
     ) where
 
 -- import Data.Function.Memoize (deriveMemoizable, memoize)
@@ -50,8 +48,11 @@ instance Ppr a => Ppr (E a) where
 instance Lift (E Type) where
     lift etype = [|E $(lift (unE etype))|]
 
+-- | The state type used to memoize expansions.
+type ExpandMap = Map Type (E Type)
+
 -- | Apply the th-desugar expand function to a 'Type' and mark it as expanded.
-expandType :: (DsMonad m, HasState (Map Type (E Type)) m)  => Type -> m (E Type)
+expandType :: (DsMonad m, HasState ExpandMap m)  => Type -> m (E Type)
 expandType typ = do
   getState >>= maybe expandType' return . Map.lookup typ
     where
@@ -62,16 +63,9 @@ expandType typ = do
 
 -- | Apply the th-desugar expand function to a 'Pred' and mark it as expanded.
 -- Note that the definition of 'Pred' changed in template-haskell-2.10.0.0.
-expandPred :: (DsMonad m, HasState (Map Type (E Type)) m)  => Type -> m (E Type)
+expandPred :: (DsMonad m, HasState ExpandMap m)  => Type -> m (E Type)
 expandPred = expandType
 
 -- | Expand a list of 'Type' and build an expanded 'ClassP' 'Pred'.
-expandClassP :: forall m. (DsMonad m, HasState (Map Type (E Type)) m)  => Name -> [Type] -> m (E Type)
+expandClassP :: forall m. (DsMonad m, HasState ExpandMap m)  => Name -> [Type] -> m (E Type)
 expandClassP className typeParameters = (expandType $ foldl AppT (ConT className) typeParameters) :: m (E Type)
-
--- | A monad that memoizes expansions.
-getExpansion :: (Monad m, HasState (Map Type (E Type)) m) => Type -> m (Maybe (E Type))
-getExpansion typ = Map.lookup typ <$> getState
-
-putExpansion :: (Monad m, HasState (Map Type (E Type)) m) => Type -> E Type -> m ()
-putExpansion typ ex = modifyState (Map.insert typ ex)
