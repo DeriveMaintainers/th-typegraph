@@ -11,7 +11,6 @@ module Language.Haskell.TH.TypeGraph.Prelude
     , constructorName
     , declarationName
     , declarationType
-    , HasSet(getSet, modifySet)
     , unReify
     , unReifyName
     , adjacent'
@@ -96,17 +95,11 @@ declarationName (NewtypeInstD _ name _ _ _) = Just name
 declarationName (TySynInstD name _) = Just name
 declarationName (ClosedTypeFamilyD name _ _ _) = Just name
 declarationName (RoleAnnotD name _) = Just name
-#if __GLASGOW_HASKELL__ >= 709
 declarationName (StandaloneDerivD _ _) = Nothing
 declarationName (DefaultSigD name _) = Just name
-#endif
 
 declarationType :: Dec -> Maybe Type
 declarationType = fmap ConT . declarationName
-
-class HasSet a m where
-    getSet :: m (Set a)
-    modifySet :: (Set a -> Set a) -> m ()
 
 instance Lift a => Lift (Set a) where
     lift s = [|Set.fromList $(lift (Set.toList s))|]

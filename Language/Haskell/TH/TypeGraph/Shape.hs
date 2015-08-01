@@ -1,4 +1,4 @@
--- | A fold on the shape of a record.
+-- | A fold on the shape of the constructors of a DataD or NewtypeD record.
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}

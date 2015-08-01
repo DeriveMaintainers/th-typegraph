@@ -35,6 +35,7 @@ import Control.Lens -- (makeLenses, view)
 import Control.Monad (filterM)
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.State (execStateT, modify, StateT)
+import Control.Monad.Trans (lift)
 import Data.Foldable
 import Data.List as List (filter, intercalate, map)
 import Data.Map as Map ((!), alter, delete, filterWithKey, fromList, keys, lookup, map, Map, mapKeysWith, mapWithKey)
@@ -45,8 +46,9 @@ import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
-import Language.Haskell.TH.TypeGraph.Info (TypeInfo, infoMap, typeSet, allVertices, fieldVertex, typeVertex')
+import Language.Haskell.TH.TypeGraph.HasState (HasState)
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
+import Language.Haskell.TH.TypeGraph.TypeInfo (TypeInfo, infoMap, typeSet, allVertices, fieldVertex, typeVertex')
 import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, vsimple)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
@@ -58,10 +60,9 @@ type GraphEdges key = Map key (Set key)
 -- fields, build and return the GraphEdges relation on TypeGraphVertex.
 -- This is not a recursive function, it stops when it reaches the field
 -- types.
-typeGraphEdges :: forall m. (DsMonad m, Functor m, MonadReader TypeInfo m) =>
-                  m (GraphEdges TGV)
+typeGraphEdges :: forall m. (DsMonad m, Functor m, MonadReader TypeInfo m, HasState (Map Type (E Type)) m) => m (GraphEdges TGV)
 typeGraphEdges = do
-  execStateT (view typeSet >>= mapM_ (\t -> expandType t >>= doType)) mempty
+  execStateT (view typeSet >>= mapM_ (\t -> lift (expandType t) >>= doType)) mempty
     where
       doType :: E Type -> StateT (GraphEdges TGV) m ()
       doType typ = do
@@ -98,8 +99,8 @@ typeGraphEdges = do
       -- Connect the vertex for this record type to one particular field vertex
       doField ::  DsMonad m => Set TGV -> Name -> Name -> Either Int Name -> Type -> StateT (GraphEdges TGV) m ()
       doField vs tname cname fld ftyp = do
-        v2 <- expandType ftyp >>= fieldVertex (tname, cname, fld)
-        v3 <- expandType ftyp >>= typeVertex'
+        v2 <- lift (expandType ftyp) >>= fieldVertex (tname, cname, fld)
+        v3 <- lift (expandType ftyp) >>= typeVertex'
         edge v2 v3
         mapM_ (flip edge v2) vs
         -- Here's where we don't recurse, see?

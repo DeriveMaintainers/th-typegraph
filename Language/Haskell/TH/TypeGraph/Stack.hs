@@ -36,20 +36,22 @@ import Control.Monad.Trans (lift)
 import Control.Monad.Writer (WriterT, runWriterT, execWriterT, tell)
 import Data.Char (toUpper)
 import Data.Generics (Data, Typeable)
-import Data.Map as Map (keys)
+import Data.Map as Map (Map, keys)
 import Data.Maybe (fromMaybe)
 import Data.Monoid
 import Data.Set (Set)
 import Debug.Trace (trace)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
+import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax hiding (lift)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges, typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E))
-import Language.Haskell.TH.TypeGraph.Info (makeTypeInfo)
+import Language.Haskell.TH.TypeGraph.HasState (HasState)
 import Language.Haskell.TH.TypeGraph.Prelude (constructorName)
 import Language.Haskell.TH.TypeGraph.Shape (FieldType(..), fName, fType, constructorFieldTypes)
+import Language.Haskell.TH.TypeGraph.TypeInfo (makeTypeInfo)
 import Language.Haskell.TH.TypeGraph.Vertex (etype, TGV)
 import Prelude hiding ((.))
 
@@ -181,7 +183,7 @@ fieldLens e@(StackElement fld con _) =
 -- The only reason for this function is backwards compatibility, the
 -- fields should be changed so they begin with _ and the regular
 -- makeLenses should be used.
-makeLenses' :: (Type -> Q (Set Type)) -> [Name] -> Q [Dec]
+makeLenses' :: forall m. (DsMonad m, HasState (Map Type (E Type)) m) => (Type -> m (Set Type)) -> [Name] -> m [Dec]
 makeLenses' extraTypes typeNames =
     execWriterT $ execStackT $ makeTypeInfo (lift . lift . extraTypes) st >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges TGV) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
     where
@@ -195,7 +197,7 @@ makeLenses' extraTypes typeNames =
       doCons dec typeName cons = mapM_ (\ con -> mapM_ (foldField (doField typeName) dec con) (constructorFieldTypes con)) cons
 
       -- (mkName $ nameBase $ tName dec) dec lensNamer) >>= tell
-      doField :: Name -> FieldType -> StackT (WriterT [Dec] Q) ()
+      doField :: Name -> FieldType -> StackT (WriterT [Dec] m) ()
       doField typeName (Named (fieldName, _, fieldType)) =
           doFieldType typeName fieldName fieldType
       doField _ _ = return ()

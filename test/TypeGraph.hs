@@ -9,14 +9,16 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Lens
 import Control.Monad.Reader (runReaderT)
+import Control.Monad.State (evalStateT)
 import Data.List as List (map)
-import Data.Map as Map (Map, fromList, keys)
+import Data.Map as Map (Map, empty, fromList, keys)
 import Data.Set as Set (fromList, singleton)
 import Language.Haskell.TH
+import Language.Haskell.TH.TypeGraph.Arity (typeArity)
 import Language.Haskell.TH.TypeGraph.Edges (dissolveM, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Expand (expandType, runExpanded, E(E))
-import Language.Haskell.TH.TypeGraph.Free (freeTypeVars, typeArity)
-import Language.Haskell.TH.TypeGraph.Info (makeTypeInfo, synonyms, typeVertex')
+import Language.Haskell.TH.TypeGraph.Free (freeTypeVars)
+import Language.Haskell.TH.TypeGraph.TypeInfo (makeTypeInfo, synonyms, typeVertex')
 import Language.Haskell.TH.TypeGraph.Vertex (TGV(..), TGVSimple(..), etype)
 import Language.Haskell.TH.Desugar (withLocalDeclarations)
 import Language.Haskell.TH.Instances ()
@@ -34,34 +36,38 @@ tests = do
      $([t|String|] >>= \string -> makeTypeInfo (const $ return mempty) [string] >>= lift . view synonyms) `shouldBe` (Map.fromList [(E (AppT ListT (ConT ''Char)), Set.singleton ''String)])
 
   it "records a type synonym 2" $ do
-     $([t|String|] >>= \string -> makeTypeInfo (const $ return mempty) [string] >>= runReaderT (expandType string >>= typeVertex') >>= lift) `shouldBe` (TGV {_field = Nothing, _vsimple = TGVSimple {_syns = singleton ''String, _etype = E (AppT ListT (ConT ''Char))}})
+     $([t|String|] >>= \string ->
+       flip evalStateT (Map.empty :: Map Type (E Type))
+                (makeTypeInfo (const $ return mempty) [string] >>=
+                 runReaderT (expandType string >>= typeVertex')) >>= lift)
+          `shouldBe` (TGV {_field = Nothing, _vsimple = TGVSimple {_syns = singleton ''String, _etype = E (AppT ListT (ConT ''Char))}})
 
   it "can build the TypeInfoGraph for Type" $ do
     $(runQ [t|Type|] >>= \typ -> makeTypeInfo (const $ return mempty) [typ] >>= lift . pprint) `shouldBe` typeInfoOfType
 
   it "can find the edges of the (simplified) subtype graph of Type (typeEdges)" $ do
-     setDifferences (Set.fromList $(withLocalDeclarations [] $
-                                runQ [t|Type|] >>= \typ ->
-                                makeTypeInfo (const $ return mempty) [typ] >>= runReaderT typeGraphEdges' >>= return . simpleEdges >>=
-                                runQ . lift . edgesToStrings)) simpleTypeEdges
+     setDifferences (Set.fromList $(withLocalDeclarations [] $ flip evalStateT (Map.empty :: Map Type (E Type)) $
+                                      runQ [t|Type|] >>= \typ ->
+                                      makeTypeInfo (const $ return mempty) [typ] >>= runReaderT typeGraphEdges' >>= return . simpleEdges >>=
+                                      runQ . lift . edgesToStrings)) simpleTypeEdges
         `shouldBe` noDifferences
 
   it "can find the edges of the (unsimplified) subtype graph of Type (typeEdges)" $ do
-     setDifferences (Set.fromList $(withLocalDeclarations [] $
+     setDifferences (Set.fromList $(withLocalDeclarations [] $ flip evalStateT (Map.empty :: Map Type (E Type)) $
                                 runQ [t|Type|] >>= \typ ->
                                 makeTypeInfo (const $ return mempty) [typ] >>= runReaderT typeGraphEdges' >>=
                                 runQ . lift . edgesToStrings)) typeEdges
         `shouldBe` noDifferences
 
   it "can find the subtypesOfType" $ do
-     setDifferences (Set.fromList $(withLocalDeclarations [] $
+     setDifferences (Set.fromList $(withLocalDeclarations [] $ flip evalStateT (Map.empty :: Map Type (E Type)) $
                                   runQ [t|Type|] >>= \typ ->
                                   makeTypeInfo (const $ return mempty) [typ] >>= runReaderT typeGraphEdges' >>=
                                   runQ . lift . List.map pprintVertex . Map.keys)) subtypesOfType
         `shouldBe` noDifferences
 
   it "can find the edges of the arity 0 subtype graph of Type (arity0TypeEdges)" $ do
-     setDifferences (Set.fromList $(withLocalDeclarations [] $
+     setDifferences (Set.fromList $(withLocalDeclarations [] $ flip evalStateT (Map.empty :: Map Type (E Type)) $
                                 runQ [t|Type|] >>= \typ ->
                                 makeTypeInfo (const $ return mempty) [typ] >>= runReaderT typeGraphEdges' >>= return . simpleEdges >>=
                                 dissolveM (\ v -> (/= 0) <$> (typeArity . runExpanded . view etype) v) >>=

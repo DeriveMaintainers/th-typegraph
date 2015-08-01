@@ -28,28 +28,30 @@ module Language.Haskell.TH.TypeGraph.Expand
     , expandPred
     , expandClassP
     , E(E)
+    -- * Memoization
+    , getExpansion
+    , putExpansion
     ) where
 
-#if __GLASGOW_HASKELL__ < 709
-import Control.Applicative
-#endif
-import Data.Function.Memoize (deriveMemoizable, memoize)
+-- import Data.Function.Memoize (deriveMemoizable, memoize)
+import Data.Map as Map (Map, lookup, insert)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar as DS (DsMonad, dsType, expand, typeToTH)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax -- (Lift(lift))
+import Language.Haskell.TH.TypeGraph.HasState (HasState(getState, modifyState))
 import Prelude hiding (pred)
 
-$(deriveMemoizable ''Type)
-$(deriveMemoizable ''Name)
-$(deriveMemoizable ''TyLit)
-$(deriveMemoizable ''NameFlavour)
-$(deriveMemoizable ''OccName)
-$(deriveMemoizable ''NameSpace)
-$(deriveMemoizable ''TyVarBndr)
-$(deriveMemoizable ''ModName)
-$(deriveMemoizable ''PkgName)
+-- $(deriveMemoizable ''Type)
+-- $(deriveMemoizable ''Name)
+-- $(deriveMemoizable ''TyLit)
+-- $(deriveMemoizable ''NameFlavour)
+-- $(deriveMemoizable ''OccName)
+-- $(deriveMemoizable ''NameSpace)
+-- $(deriveMemoizable ''TyVarBndr)
+-- $(deriveMemoizable ''ModName)
+-- $(deriveMemoizable ''PkgName)
 
 -- | This class lets us use the same expand* functions to work with
 -- specially marked expanded types or with the original types.
@@ -58,46 +60,43 @@ class Expanded un ex | ex -> un where
     runExpanded' :: ex -> un -- ^ Strip mark off an expanded value
 
 -- | Apply the th-desugar expand function to a 'Type' and mark it as expanded.
-expandType :: (DsMonad m, Expanded Type e)  => Type -> m e
-expandType = memoize $ \typ -> markExpanded <$> DS.typeToTH <$> (DS.dsType typ >>= DS.expand)
+expandType :: (DsMonad m, Expanded Type e, HasState (Map Type e) m)  => Type -> m e
+expandType typ = do
+  getState >>= maybe expandType' return . Map.lookup typ 
+    where
+      expandType' =
+          do e <- markExpanded <$> DS.typeToTH <$> (DS.dsType typ >>= DS.expand)
+             modifyState (Map.insert typ e)
+             return e
 
 -- | Apply the th-desugar expand function to a 'Pred' and mark it as expanded.
 -- Note that the definition of 'Pred' changed in template-haskell-2.10.0.0.
-expandPred :: (DsMonad m, Expanded Pred e)  => Pred -> m e
-#if __GLASGOW_HASKELL__ >= 709
+expandPred :: (DsMonad m, Expanded Pred e, HasState (Map Type e) m)  => Pred -> m e
 expandPred = expandType
-#else
-expandPred (ClassP className typeParameters) = expandClassP className typeParameters
-expandPred (EqualP type1 type2) = markExpanded <$> (EqualP <$> (runExpanded <$> expandType type1) <*> (runExpanded <$> expandType type2))
-#endif
 
 -- | Expand a list of 'Type' and build an expanded 'ClassP' 'Pred'.
-expandClassP :: forall m e. (DsMonad m, Expanded Pred e)  => Name -> [Type] -> m e
-expandClassP className typeParameters =
-#if __GLASGOW_HASKELL__ >= 709
-      (expandType $ foldl AppT (ConT className) typeParameters) :: m e
-#else
-      (markExpanded . ClassP className . map runExpanded) <$> mapM expandType typeParameters
-#endif
-
-runExpanded :: Expanded a (E a) => E a -> a
-runExpanded = runExpanded'
+expandClassP :: forall m e. (DsMonad m, Expanded Pred e, HasState (Map Type e) m)  => Name -> [Type] -> m e
+expandClassP className typeParameters = (expandType $ foldl AppT (ConT className) typeParameters) :: m e
 
 -- | A concrete type for which Expanded instances are declared below.
 newtype E a = E a deriving (Eq, Ord, Show)
 
+runExpanded :: Expanded a (E a) => E a -> a
+runExpanded = runExpanded'
+
 instance Expanded Type (E Type) where
     markExpanded = E
     runExpanded' (E x) = x
-
-#if __GLASGOW_HASKELL__ < 709
-instance Expanded Pred (E Pred) where
-    markExpanded = E
-    runExpanded' (E x) = x
-#endif
 
 instance Ppr a => Ppr (E a) where
     ppr (E x) = ppr x
 
 instance Lift (E Type) where
     lift etype = [|markExpanded $(lift (runExpanded etype))|]
+
+-- | A monad that memoizes expansions.
+getExpansion :: (Monad m, Expanded Type e, HasState (Map Type e) m) => Type -> m (Maybe e)
+getExpansion typ = Map.lookup typ <$> getState
+
+putExpansion :: (Monad m, Expanded Type e, HasState (Map Type e) m) => Type -> e -> m ()
+putExpansion typ ex = modifyState (Map.insert typ ex)

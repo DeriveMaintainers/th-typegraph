@@ -8,9 +8,9 @@ import Data.Ratio (Ratio)
 import Data.Set as Set (Set, empty, fromList, toList, union)
 import GHC.Prim -- ByteArray#, Char#, etc
 import Language.Haskell.TH
+import Language.Haskell.TH.TypeGraph.Arity (typeArity)
 import Language.Haskell.TH.TypeGraph.Edges (typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType, markExpanded)
-import Language.Haskell.TH.TypeGraph.Free (typeArity)
 import Language.Haskell.TH.TypeGraph.Vertex (TypeGraphVertex(..))
 import Language.Haskell.TH.Desugar (withLocalDeclarations)
 import Language.Haskell.TH.Instances ()

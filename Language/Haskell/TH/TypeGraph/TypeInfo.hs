@@ -9,7 +9,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
-module Language.Haskell.TH.TypeGraph.Info
+module Language.Haskell.TH.TypeGraph.TypeInfo
     ( -- * Type and builders
       TypeInfo, startTypes, fields, infoMap, synonyms, typeSet
     , makeTypeInfo
@@ -40,6 +40,7 @@ import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax as TH (Lift(lift), Quasi(..))
 import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
+import Language.Haskell.TH.TypeGraph.HasState (HasState(getState, modifyState))
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
 import Language.Haskell.TH.TypeGraph.Shape (Field)
 import Language.Haskell.TH.TypeGraph.Vertex (TGV(..), TGVSimple(..), etype)
@@ -75,6 +76,10 @@ instance Ppr TypeInfo where
 
 $(makeLenses ''TypeInfo)
 
+instance Monad m => HasState (Map Type (E Type)) (StateT TypeInfo m) where
+    getState = use expanded
+    modifyState f = expanded %= f
+
 instance Lift TypeInfo where
     lift (TypeInfo {_startTypes = st, _typeSet = t, _infoMap = i, _expanded = e, _synonyms = s, _fields = f}) =
         [| TypeInfo { _startTypes = $(TH.lift st)
@@ -86,7 +91,9 @@ instance Lift TypeInfo where
                     } |]
 
 -- | Collect the graph information for one type and all the types
--- reachable from it.
+-- reachable from it.  The extraTypes function parameter allows extra
+-- edges to be added to the graph other than those implied by the Type
+-- structure.
 collectTypeInfo :: forall m. DsMonad m => (Type -> m (Set Type)) -> Type -> StateT TypeInfo m ()
 collectTypeInfo extraTypes typ0 = do
   doType typ0
