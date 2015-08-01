@@ -36,7 +36,7 @@ import Control.Monad.Trans (lift)
 import Control.Monad.Writer (WriterT, runWriterT, execWriterT, tell)
 import Data.Char (toUpper)
 import Data.Generics (Data, Typeable)
-import Data.Map as Map (Map, keys)
+import Data.Map as Map (keys)
 import Data.Maybe (fromMaybe)
 import Data.Monoid
 import Data.Set (Set)
@@ -47,7 +47,7 @@ import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax hiding (lift)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges, typeGraphEdges)
-import Language.Haskell.TH.TypeGraph.Expand (E(E))
+import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap)
 import Language.Haskell.TH.TypeGraph.HasState (HasState)
 import Language.Haskell.TH.TypeGraph.Prelude (constructorName)
 import Language.Haskell.TH.TypeGraph.Shape (FieldType(..), fName, fType, constructorFieldTypes)
@@ -183,7 +183,7 @@ fieldLens e@(StackElement fld con _) =
 -- The only reason for this function is backwards compatibility, the
 -- fields should be changed so they begin with _ and the regular
 -- makeLenses should be used.
-makeLenses' :: forall m. (DsMonad m, HasState (Map Type (E Type)) m) => (Type -> m (Set Type)) -> [Name] -> m [Dec]
+makeLenses' :: forall m. (DsMonad m, HasState ExpandMap m) => (Type -> m (Set Type)) -> [Name] -> m [Dec]
 makeLenses' extraTypes typeNames =
     execWriterT $ execStackT $ makeTypeInfo (lift . lift . extraTypes) st >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges TGV) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
     where

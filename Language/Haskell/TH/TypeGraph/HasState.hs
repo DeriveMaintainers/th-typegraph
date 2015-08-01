@@ -1,3 +1,4 @@
+-- | MonadState without the function dependency @m -> s@.
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Language.Haskell.TH.TypeGraph.HasState
