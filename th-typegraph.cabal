@@ -24,7 +24,6 @@ library
     data-default,
     haskell-src-exts,
     lens,
-    memoize,
     mtl,
     set-extra,
     syb,
