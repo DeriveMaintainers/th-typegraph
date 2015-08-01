@@ -16,7 +16,7 @@ import Data.Set as Set (fromList, singleton)
 import Language.Haskell.TH
 import Language.Haskell.TH.TypeGraph.Arity (typeArity)
 import Language.Haskell.TH.TypeGraph.Edges (dissolveM, simpleEdges)
-import Language.Haskell.TH.TypeGraph.Expand (expandType, runExpanded, E(E))
+import Language.Haskell.TH.TypeGraph.Expand (expandType, E(E, unE))
 import Language.Haskell.TH.TypeGraph.Free (freeTypeVars)
 import Language.Haskell.TH.TypeGraph.TypeInfo (makeTypeInfo, synonyms, typeVertex')
 import Language.Haskell.TH.TypeGraph.Vertex (TGV(..), TGVSimple(..), etype)
@@ -70,7 +70,7 @@ tests = do
      setDifferences (Set.fromList $(withLocalDeclarations [] $ flip evalStateT (Map.empty :: Map Type (E Type)) $
                                 runQ [t|Type|] >>= \typ ->
                                 makeTypeInfo (const $ return mempty) [typ] >>= runReaderT typeGraphEdges' >>= return . simpleEdges >>=
-                                dissolveM (\ v -> (/= 0) <$> (typeArity . runExpanded . view etype) v) >>=
+                                dissolveM (\ v -> (/= 0) <$> (typeArity . unE . view etype) v) >>=
                                 runQ . lift . edgesToStrings)) arity0TypeEdges
         `shouldBe` noDifferences
 #if 0

@@ -13,7 +13,7 @@ import Data.Generics (Data, everywhere, mkT)
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges)
-import Language.Haskell.TH.TypeGraph.Expand (E, markExpanded, runExpanded)
+import Language.Haskell.TH.TypeGraph.Expand (E(unE))
 import Language.Haskell.TH.TypeGraph.Edges (typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.HasState (HasState)
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
@@ -45,13 +45,13 @@ pprintDec :: Dec -> String
 pprintDec = pprint' . unReify
 
 pprintType :: E Type -> String
-pprintType = pprint' . unReify . runExpanded
+pprintType = pprint' . unReify . unE
 
 pprintVertex :: Ppr v => v -> String
 pprintVertex = pprint'
 
 pprintPred :: E Pred -> String
-pprintPred = pprint' . unReify . runExpanded
+pprintPred = pprint' . unReify . unE
 
 edgesToStrings :: (TypeGraphVertex v, Ppr v) => GraphEdges v -> [(String, [String])]
 edgesToStrings mp = List.map (\ (t, s) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)

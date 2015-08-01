@@ -35,7 +35,6 @@ library
     Language.Haskell.TH.TypeGraph.Arity
     Language.Haskell.TH.TypeGraph.Edges
     Language.Haskell.TH.TypeGraph.Expand
-    Language.Haskell.TH.TypeGraph.ExpandUnsafe
     Language.Haskell.TH.TypeGraph.Free
     Language.Haskell.TH.TypeGraph.HasState
     Language.Haskell.TH.TypeGraph.Prelude
