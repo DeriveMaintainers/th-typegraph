@@ -3,6 +3,7 @@
 -- type mechanism, and is unaware of View instances and other things
 -- that modify the type graph.  Lets see how it adapts.
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -12,14 +13,15 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.TH.TypeGraph.Stack
-    ( HasStack(push, withStack)
-    , Wrapper(Wrapper), unwrap
-    , StackElement(..)
+    ( StackElement(..)
     , prettyStack
     , foldField
       -- * Stack+instance map monad
+    , HasStack
     , StackT
     , execStackT
+    , withStack
+    , push
       -- * Stack operations
     , stackAccessor
     , makeLenses'
@@ -28,17 +30,14 @@ module Language.Haskell.TH.TypeGraph.Stack
 
 import Control.Applicative
 import Control.Category ((.))
-import Control.Lens (iso, Lens', lens, makeLenses, set, view)
-import Control.Monad.Reader (ReaderT, runReaderT, ask, local)
-import Control.Monad.RWS (RWST)
-import Control.Monad.State (StateT, evalStateT, get)
+import Control.Lens (iso, Lens', lens, set, view)
+import Control.Monad.Reader (ReaderT, runReaderT {-, ask, local-})
 import Control.Monad.Trans (lift)
-import Control.Monad.Writer (WriterT, runWriterT, execWriterT, tell)
+import Control.Monad.Writer (WriterT, execWriterT, tell)
 import Data.Char (toUpper)
 import Data.Generics (Data, Typeable)
 import Data.Map as Map (keys)
 import Data.Maybe (fromMaybe)
-import Data.Monoid
 import Data.Set (Set)
 import Debug.Trace (trace)
 import Language.Haskell.Exts.Syntax ()
@@ -48,7 +47,7 @@ import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax hiding (lift)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges, typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap)
-import Language.Haskell.TH.TypeGraph.HasState (HasState)
+import Language.Haskell.TH.TypeGraph.HasState (HasState, HasReader(ask, local))
 import Language.Haskell.TH.TypeGraph.Prelude (constructorName)
 import Language.Haskell.TH.TypeGraph.Shape (FieldType(..), fName, fType, constructorFieldTypes)
 import Language.Haskell.TH.TypeGraph.TypeInfo (makeTypeInfo)
@@ -60,44 +59,15 @@ import Prelude hiding ((.))
 -- we only need the field names.
 data StackElement = StackElement FieldType Con Dec deriving (Eq, Show, Data, Typeable)
 
-class Monad m => HasStack m where
-    withStack :: ([StackElement] -> m a) -> m a -- Better name: askStack
-    push :: FieldType -> Con -> Dec -> m a -> m a -- Better name: localStack
+type HasStack = HasReader [StackElement]
 
-instance (Quasi m, Monoid w) => HasStack (RWST [StackElement] w s m) where
-    withStack f = ask >>= f
-    push fld con dec action = local (\ stk -> StackElement fld con dec : stk) action
+withStack :: (Monad m, HasReader [StackElement] m) => ([StackElement] -> m a) -> m a
+withStack f = ask >>= f
 
-instance HasStack m => HasStack (StateT s m) where
-    withStack f = lift (withStack return) >>= f
-    push fld con dec action = get >>= \ st -> lift $ push fld con dec (evalStateT action st)
+push :: HasReader [StackElement] m => FieldType -> Con -> Dec -> m a -> m a
+push fld con dec = local (\stk -> StackElement fld con dec : stk)
 
-instance Quasi m => HasStack (ReaderT [StackElement] m) where
-    withStack f = ask >>= f
-    push fld con dec action = local (\ stk -> StackElement fld con dec : stk) action
-
--- We can't write @HasStack (ReaderT a m)@ because it overlaps with
--- @HasStack (ReaderT [StackElement] m)@.  However, we can write
--- @HasStack (ReaderT (Wrapper a) m@.
-instance HasStack m => HasStack (ReaderT (Wrapper a) m) where
-    withStack f = lift (withStack return) >>= f
-    push fld con dec action =
-        do r <- ask
-           a <- lift $ push fld con dec (runReaderT action r)
-           return a
-
-newtype Wrapper a = Wrapper {_unwrap :: a}
-
-$(makeLenses ''Wrapper)
-
-instance (HasStack m, Monoid w) => HasStack (WriterT w m) where
-    withStack f = lift (withStack return) >>= f
-    push fld con dec action =
-        do (r, w') <- lift $ push fld con dec (runWriterT action)
-           tell w'
-           return r
-
-traceIndented :: HasStack m => String -> m ()
+traceIndented :: HasReader [StackElement] m => String -> m ()
 traceIndented s = withStack $ \stk -> trace (replicate (length stk) ' ' ++ s) (return ())
 
 prettyStack :: [StackElement] -> String
@@ -119,7 +89,7 @@ prettyStack = prettyStack' . reverse
       prettyType typ = "(" ++ show typ ++ ")"
 
 -- | Push the stack and process the field.
-foldField :: HasStack m => (FieldType -> m r) -> Dec -> Con -> FieldType -> m r
+foldField :: HasReader [StackElement] m => (FieldType -> m r) -> Dec -> Con -> FieldType -> m r
 foldField doField dec con fld = push fld con dec $ doField fld
 
 type StackT m = ReaderT [StackElement] m
@@ -128,7 +98,7 @@ execStackT :: Monad m => StackT m a -> m a
 execStackT action = runReaderT action []
 
 -- | Re-implementation of stack accessor in terms of stackLens
-stackAccessor :: (Quasi m, HasStack m) => ExpQ -> Type -> m Exp
+stackAccessor :: (Quasi m, HasReader [StackElement] m) => ExpQ -> Type -> m Exp
 stackAccessor value typ0 =
     withStack f
     where
@@ -138,7 +108,7 @@ stackAccessor value typ0 =
         Just typ <- stackType
         runQ [| view $(pure lns) $value :: $(pure typ) |]
 
-stackType :: HasStack m => m (Maybe Type)
+stackType :: HasReader [StackElement] m => m (Maybe Type)
 stackType =
     withStack (return . f)
     where

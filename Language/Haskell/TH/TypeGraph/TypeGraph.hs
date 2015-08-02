@@ -2,6 +2,7 @@
 
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -39,7 +40,8 @@ import Control.Applicative
 #endif
 import Control.Lens -- (makeLenses, over, view)
 import Control.Monad (when)
-import Control.Monad.Reader (ask, local, MonadReader, ReaderT, runReaderT)
+import Control.Monad.Reader (MonadReader, ReaderT, runReaderT)
+import qualified Control.Monad.Reader as MTL (ask)
 import Control.Monad.State (execStateT, modify, StateT)
 import Control.Monad.Trans (lift)
 import Data.Default (Default(def))
@@ -58,11 +60,11 @@ import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax (Quasi(..))
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges)
-import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
-import Language.Haskell.TH.TypeGraph.HasState (HasState(getState, modifyState))
+import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap, expandType)
+import Language.Haskell.TH.TypeGraph.HasState (HasState(getState, modifyState), HasReader(ask, local))
 import Language.Haskell.TH.TypeGraph.Prelude (adjacent', reachable')
 import Language.Haskell.TH.TypeGraph.TypeInfo (startTypes, TypeInfo, typeVertex', fieldVertex)
-import Language.Haskell.TH.TypeGraph.Stack (HasStack(withStack, push), StackElement(StackElement))
+import Language.Haskell.TH.TypeGraph.Stack (StackElement)
 import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, vsimple, TypeGraphVertex, etype)
 import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or)
 
@@ -92,9 +94,9 @@ data TypeGraph
 
 $(makeLenses ''TypeGraph)
 
-instance Monad m => HasStack (ReaderT TypeGraph m) where
-    withStack f = ask >>= f . view stack
-    push fld con dec action = local (stack %~ (\s -> StackElement fld con dec : s)) action
+instance (Monad m, HasReader [StackElement] m) => HasReader [StackElement] (ReaderT TypeGraph m) where
+    ask = lift ask
+    local f action = MTL.ask >>= runReaderT (local f (lift action))
 
 allPathStarts :: forall m. (DsMonad m, HasState (Map Type (E Type)) m, MonadReader TypeGraph m) => m (Set TGV)
 allPathStarts = do
@@ -150,17 +152,17 @@ isReachable gkey key0 (g, _vf, kf) = path g (fromJust $ kf key0) (fromJust $ kf 
 
 -- | Return the TGV associated with a particular type,
 -- with no field specified.
-typeGraphVertex :: (MonadReader TypeGraph m, HasState (Map Type (E Type)) m, DsMonad m) => Type -> m TGV
+typeGraphVertex :: (MonadReader TypeGraph m, HasState ExpandMap m, DsMonad m) => Type -> m TGV
 typeGraphVertex typ = do
         typ' <- expandType typ
-        ask >>= runReaderT (typeVertex' typ') . view typeInfo
+        MTL.ask >>= runReaderT (typeVertex' typ') . view typeInfo
         -- magnify typeInfo $ vertex Nothing typ'
 
 -- | Return the TGV associated with a particular type and field.
 typeGraphVertexOfField :: (MonadReader TypeGraph m, HasState (Map Type (E Type)) m, DsMonad m) => (Name, Name, Either Int Name) -> Type -> m TGV
 typeGraphVertexOfField fld typ = do
         typ' <- expandType typ
-        ask >>= runReaderT (fieldVertex fld typ') . view typeInfo
+        MTL.ask >>= runReaderT (fieldVertex fld typ') . view typeInfo
         -- magnify typeInfo $ vertex (Just fld) typ'
 
 -- type TypeGraphEdges typ = Map typ (Set typ)
@@ -254,7 +256,7 @@ adjacent typ =
 -- FIXME: pass in ti, pass in makeTypeGraphEdges, remove Q, move to TypeGraph.Graph
 makeTypeGraph :: MonadReader TypeInfo m => (GraphEdges TGV) -> m TypeGraph
 makeTypeGraph es = do
-  ti <- ask
+  ti <- MTL.ask
   return $ TypeGraph
              { _typeInfo = ti
              , _edges = es
