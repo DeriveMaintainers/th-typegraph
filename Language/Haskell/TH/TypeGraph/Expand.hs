@@ -36,7 +36,7 @@ import Language.Haskell.TH
 import Language.Haskell.TH.Desugar as DS (DsMonad, dsType, expand, typeToTH)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax -- (Lift(lift))
-import Language.Haskell.TH.TypeGraph.HasState (HasState(getState, modifyState))
+import Control.Monad.State.Extra (MonadState(get), modify)
 import Prelude hiding (pred)
 
 -- | A concrete type used to mark type which have been expanded
@@ -52,20 +52,20 @@ instance Lift (E Type) where
 type ExpandMap = Map Type (E Type)
 
 -- | Apply the th-desugar expand function to a 'Type' and mark it as expanded.
-expandType :: (DsMonad m, HasState ExpandMap m)  => Type -> m (E Type)
+expandType :: (DsMonad m, MonadState ExpandMap m)  => Type -> m (E Type)
 expandType typ = do
-  getState >>= maybe expandType' return . Map.lookup typ
+  get >>= maybe expandType' return . Map.lookup typ
     where
       expandType' =
           do e <- E <$> DS.typeToTH <$> (DS.dsType typ >>= DS.expand)
-             modifyState (Map.insert typ e)
+             modify (Map.insert typ e)
              return e
 
 -- | Apply the th-desugar expand function to a 'Pred' and mark it as expanded.
 -- Note that the definition of 'Pred' changed in template-haskell-2.10.0.0.
-expandPred :: (DsMonad m, HasState ExpandMap m)  => Type -> m (E Type)
+expandPred :: (DsMonad m, MonadState ExpandMap m)  => Type -> m (E Type)
 expandPred = expandType
 
 -- | Expand a list of 'Type' and build an expanded 'ClassP' 'Pred'.
-expandClassP :: forall m. (DsMonad m, HasState ExpandMap m)  => Name -> [Type] -> m (E Type)
+expandClassP :: forall m. (DsMonad m, MonadState ExpandMap m)  => Name -> [Type] -> m (E Type)
 expandClassP className typeParameters = (expandType $ foldl AppT (ConT className) typeParameters) :: m (E Type)

@@ -3,7 +3,9 @@ module Common where
 
 import Control.Applicative ((<$>))
 import Control.Lens (view)
-import Control.Monad.Reader (MonadReader, ReaderT)
+import Control.Monad.Reader (ReaderT)
+import Control.Monad.Reader.Extra (MonadReader)
+import Control.Monad.State.Extra (MonadState)
 import Data.Default (Default)
 import Data.List as List (intercalate, map)
 import Data.Map as Map (Map, filter, fromList, fromListWith, keys, toList)
@@ -15,7 +17,6 @@ import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(unE))
 import Language.Haskell.TH.TypeGraph.Edges (typeGraphEdges)
-import Language.Haskell.TH.TypeGraph.HasState (HasState)
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
 import Language.Haskell.TH.TypeGraph.Shape (Field)
 import Language.Haskell.TH.TypeGraph.TypeInfo (TypeInfo)
@@ -56,12 +57,12 @@ pprintPred = pprint' . unReify . unE
 edgesToStrings :: (TypeGraphVertex v, Ppr v) => GraphEdges v -> [(String, [String])]
 edgesToStrings mp = List.map (\ (t, s) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
 
-typeGraphEdges' :: forall m. (DsMonad m, MonadReader TypeInfo m, HasState (Map Type (E Type)) m) => m (GraphEdges TGV)
+typeGraphEdges' :: forall m. (DsMonad m, MonadReader TypeInfo m, MonadState (Map Type (E Type)) m) => m (GraphEdges TGV)
 typeGraphEdges' = typeGraphEdges
 
 -- | Return a mapping from vertex to all the known type synonyms for
 -- the type in that vertex.
-typeSynonymMap :: forall m. (DsMonad m, MonadReader TypeInfo m, HasState (Map Type (E Type)) m) =>
+typeSynonymMap :: forall m. (DsMonad m, MonadReader TypeInfo m, MonadState (Map Type (E Type)) m) =>
                   m (Map TGV (Set Name))
 typeSynonymMap =
      (Map.filter (not . Set.null) .
@@ -70,7 +71,7 @@ typeSynonymMap =
       Map.keys) <$> (typeGraphEdges :: m (GraphEdges TGV))
 
 -- | Like 'typeSynonymMap', but with all field information removed.
-typeSynonymMapSimple :: forall m. (DsMonad m, MonadReader TypeInfo m, HasState (Map Type (E Type)) m) =>
+typeSynonymMapSimple :: forall m. (DsMonad m, MonadReader TypeInfo m, MonadState (Map Type (E Type)) m) =>
                         m (Map (E Type) (Set Name))
 typeSynonymMapSimple =
     simplify <$> typeSynonymMap

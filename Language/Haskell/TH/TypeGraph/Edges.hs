@@ -33,8 +33,9 @@ import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
 import Control.Monad (filterM)
-import Control.Monad.Reader (MonadReader)
-import Control.Monad.State (execStateT, modify, StateT)
+import Control.Monad.Reader.Extra (ask, MonadReader)
+import Control.Monad.State.Extra (modify)
+import Control.Monad.State as MTL (execStateT, StateT)
 import Control.Monad.Trans (lift)
 import Data.Foldable
 import Data.List as List (filter, intercalate, map)
@@ -45,8 +46,8 @@ import Data.Set as Set (delete, empty, filter, insert, map, member, fromList, Se
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.PprLib (ptext)
-import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType)
-import Language.Haskell.TH.TypeGraph.HasState (HasState)
+import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap, expandType)
+import Control.Monad.State.Extra (MonadState)
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
 import Language.Haskell.TH.TypeGraph.TypeInfo (TypeInfo, infoMap, typeSet, allVertices, fieldVertex, typeVertex')
 import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, vsimple)
@@ -60,16 +61,15 @@ type GraphEdges key = Map key (Set key)
 -- fields, build and return the GraphEdges relation on TypeGraphVertex.
 -- This is not a recursive function, it stops when it reaches the field
 -- types.
-typeGraphEdges :: forall m. (DsMonad m, Functor m, MonadReader TypeInfo m, HasState (Map Type (E Type)) m) => m (GraphEdges TGV)
+typeGraphEdges :: forall m. (DsMonad m, Functor m, MonadReader TypeInfo m, MonadState ExpandMap m) => m (GraphEdges TGV)
 typeGraphEdges = do
-  execStateT (view typeSet >>= mapM_ (\t -> lift (expandType t) >>= doType)) mempty
+  execStateT (view typeSet <$> ask >>= mapM_ (\t -> lift (expandType t) >>= doType)) (mempty :: GraphEdges TGV)
     where
-      doType :: E Type -> StateT (GraphEdges TGV) m ()
       doType typ = do
         vs <- allVertices Nothing typ
         mapM_ node vs
         case typ of
-          E (ConT tname) -> view infoMap >>= \ mp -> doInfo vs (mp ! tname)
+          E (ConT tname) -> ask >>= \(x :: TypeInfo) -> doInfo vs (view infoMap x ! tname)
           E (AppT typ1 typ2) -> do
             v1 <- typeVertex' (E typ1)
             v2 <- typeVertex' (E typ2)
@@ -108,7 +108,7 @@ typeGraphEdges = do
 
       node :: TGV -> StateT (GraphEdges TGV) m ()
       -- node v = pass (return ((), (Map.alter (Just . maybe (def, Set.empty) id) v)))
-      node v = modify (Map.alter (Just . maybe (Set.empty) id) v)
+      node v = modify (Map.alter (Just . maybe (Set.empty) id) v :: Map TGV (Set TGV) -> Map TGV (Set TGV))
 
       edge :: TGV -> TGV -> StateT (GraphEdges TGV) m ()
       edge v1 v2 = node v2 >> modify f

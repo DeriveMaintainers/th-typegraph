@@ -17,6 +17,7 @@ description:        Build a graph whose nodes are Types and whose edges represen
 extra-source-files: test/Common.hs test/Tests.hs test/TypeGraph.hs test/Values.hs
 
 library
+  hs-source-dirs: .
   build-depends:
     base >= 4.8 && < 5,
     base-compat,
@@ -25,6 +26,7 @@ library
     haskell-src-exts,
     lens,
     mtl,
+    mtl-unleashed,
     set-extra,
     syb,
     template-haskell >= 2.10,
@@ -36,7 +38,6 @@ library
     Language.Haskell.TH.TypeGraph.Edges
     Language.Haskell.TH.TypeGraph.Expand
     Language.Haskell.TH.TypeGraph.Free
-    Language.Haskell.TH.TypeGraph.HasState
     Language.Haskell.TH.TypeGraph.Prelude
     Language.Haskell.TH.TypeGraph.Shape
     Language.Haskell.TH.TypeGraph.Stack
@@ -50,7 +51,7 @@ test-suite th-typegraph-tests
   hs-source-dirs:   test
   main-is:          Tests.hs
   build-depends:    array, base, bytestring, containers, data-default, deepseq, ghc-prim,
-                    hspec, hspec-core, lens, mtl, syb, template-haskell, text,
+                    hspec, hspec-core, lens, mtl, mtl-unleashed, syb, template-haskell, text,
                     th-typegraph, th-desugar, th-orphans, th-reify-many
   default-language: Haskell2010
 
