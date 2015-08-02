@@ -16,11 +16,11 @@ import Language.Haskell.TH.TypeGraph.Prelude (pprint')
 
 data St
     = St { _result :: Set Name
-         , _stack :: Set Name
+         , _visited :: Set Name
          } deriving Show
 
 st0 :: St
-st0 = St {_result = empty, _stack = empty}
+st0 = St {_result = empty, _visited = empty}
 
 $(makeLenses ''St)
 
@@ -66,11 +66,11 @@ instance FreeTypeVars Type where
 go_app :: (Quasi m, MonadState St m) => [Type] -> Type -> m ()
 go_app params (AppT t1 t2) = go_app (t2 : params) t1
 go_app params (ConT n) = do
-    stk <- use stack
+    stk <- use visited
     case Set.member n stk of
       True -> return ()
       False -> do
-        stack %= Set.insert n
+        visited %= Set.insert n
         qReify n >>= go_info (reverse params)
 go_app params typ = mapM_ ftv (typ : params)
 go_info :: (Quasi m, MonadState St m) => [Type] -> Info -> m ()

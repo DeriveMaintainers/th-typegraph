@@ -11,7 +11,8 @@ import Language.Haskell.TH.TypeGraph.Prelude (pprint')
 
 -- | Compute the arity of a type - the number of type parameters that
 -- must be applied to it in order to obtain a concrete type.  I'm not
--- quite sure I understand the relationship between this and 'freeTypeVars'.
+-- quite sure I understand the relationship between this and
+-- 'freeTypeVars'.
 typeArity :: Quasi m => Type -> m Int
 typeArity (ForallT _ _ typ) = typeArity typ -- Shouldn't a forall affect the arity?
 typeArity ListT = return 1
