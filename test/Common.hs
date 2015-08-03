@@ -3,9 +3,8 @@ module Common where
 
 import Control.Applicative ((<$>))
 import Control.Lens (view)
-import Control.Monad.Reader (ReaderT)
-import Control.Monad.Reader.Extra (MonadReader)
-import Control.Monad.State.Extra (MonadState)
+import Control.Monad.Readers (MonadReaders, ReaderT)
+import Control.Monad.States (MonadStates)
 import Data.Default (Default)
 import Data.List as List (intercalate, map)
 import Data.Map as Map (Map, filter, fromList, fromListWith, keys, toList)
@@ -57,12 +56,12 @@ pprintPred = pprint' . unReify . unE
 edgesToStrings :: (TypeGraphVertex v, Ppr v) => GraphEdges v -> [(String, [String])]
 edgesToStrings mp = List.map (\ (t, s) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
 
-typeGraphEdges' :: forall m. (DsMonad m, MonadReader TypeInfo m, MonadState (Map Type (E Type)) m) => m (GraphEdges TGV)
+typeGraphEdges' :: forall m. (DsMonad m, MonadReaders TypeInfo m, MonadStates (Map Type (E Type)) m) => m (GraphEdges TGV)
 typeGraphEdges' = typeGraphEdges
 
 -- | Return a mapping from vertex to all the known type synonyms for
 -- the type in that vertex.
-typeSynonymMap :: forall m. (DsMonad m, MonadReader TypeInfo m, MonadState (Map Type (E Type)) m) =>
+typeSynonymMap :: forall m. (DsMonad m, MonadReaders TypeInfo m, MonadStates (Map Type (E Type)) m) =>
                   m (Map TGV (Set Name))
 typeSynonymMap =
      (Map.filter (not . Set.null) .
@@ -71,7 +70,7 @@ typeSynonymMap =
       Map.keys) <$> (typeGraphEdges :: m (GraphEdges TGV))
 
 -- | Like 'typeSynonymMap', but with all field information removed.
-typeSynonymMapSimple :: forall m. (DsMonad m, MonadReader TypeInfo m, MonadState (Map Type (E Type)) m) =>
+typeSynonymMapSimple :: forall m. (DsMonad m, MonadReaders TypeInfo m, MonadStates (Map Type (E Type)) m) =>
                         m (Map (E Type) (Set Name))
 typeSynonymMapSimple =
     simplify <$> typeSynonymMap

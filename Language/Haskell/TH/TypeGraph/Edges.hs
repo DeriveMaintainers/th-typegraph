@@ -33,9 +33,8 @@ import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
 import Control.Monad (filterM)
-import Control.Monad.Reader.Extra (ask, MonadReader)
-import Control.Monad.State.Extra (modify)
-import Control.Monad.State as MTL (execStateT, StateT)
+import Control.Monad.Readers (ask, MonadReaders)
+import Control.Monad.States (MonadStates, modify, execStateT, StateT)
 import Control.Monad.Trans (lift)
 import Data.Foldable
 import Data.List as List (filter, intercalate, map)
@@ -47,7 +46,6 @@ import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap, expandType)
-import Control.Monad.State.Extra (MonadState)
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
 import Language.Haskell.TH.TypeGraph.TypeInfo (TypeInfo, infoMap, typeSet, allVertices, fieldVertex, typeVertex')
 import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, vsimple)
@@ -61,7 +59,7 @@ type GraphEdges key = Map key (Set key)
 -- fields, build and return the GraphEdges relation on TypeGraphVertex.
 -- This is not a recursive function, it stops when it reaches the field
 -- types.
-typeGraphEdges :: forall m. (DsMonad m, Functor m, MonadReader TypeInfo m, MonadState ExpandMap m) => m (GraphEdges TGV)
+typeGraphEdges :: forall m. (DsMonad m, Functor m, MonadReaders TypeInfo m, MonadStates ExpandMap m) => m (GraphEdges TGV)
 typeGraphEdges = do
   execStateT (view typeSet <$> ask >>= mapM_ (\t -> lift (expandType t) >>= doType)) (mempty :: GraphEdges TGV)
     where

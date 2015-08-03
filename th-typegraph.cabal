@@ -26,7 +26,7 @@ library
     haskell-src-exts,
     lens,
     mtl,
-    mtl-unleashed,
+    mtl-unleashed >= 0.2.1,
     set-extra,
     syb,
     template-haskell >= 2.10,
