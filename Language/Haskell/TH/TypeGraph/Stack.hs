@@ -18,6 +18,8 @@ module Language.Haskell.TH.TypeGraph.Stack
     , foldField
       -- * Stack+instance map monad
     , HasStack
+    , StackT
+    , execStackT
     , withStack
     , push
       -- * Stack operations
@@ -29,8 +31,8 @@ module Language.Haskell.TH.TypeGraph.Stack
 import Control.Applicative
 import Control.Category ((.))
 import Control.Lens (iso, Lens', lens, set, view)
-import Control.Monad.Reader (MonadReader(local), ReaderT, runReaderT)
-import Control.Monad.State (MonadState)
+import Control.Monad.Readers (MonadReaders(ask, local), ReaderT, runReaderT)
+import Control.Monad.States (MonadStates)
 import Control.Monad.Trans (lift)
 import Control.Monad.Writer (WriterT, execWriterT, tell)
 import Data.Char (toUpper)
@@ -45,7 +47,7 @@ import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax hiding (lift)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges, typeGraphEdges)
-import Language.Haskell.TH.TypeGraph.Expand (E(E), HasExpandMap)
+import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap)
 import Language.Haskell.TH.TypeGraph.Prelude (constructorName)
 import Language.Haskell.TH.TypeGraph.Shape (FieldType(..), fName, fType, constructorFieldTypes)
 import Language.Haskell.TH.TypeGraph.TypeInfo (makeTypeInfo)
@@ -57,19 +59,15 @@ import Prelude hiding ((.))
 -- we only need the field names.
 data StackElement = StackElement FieldType Con Dec deriving (Eq, Show, Data, Typeable)
 
-class HasStack r where stack :: Lens' r [StackElement]
+type HasStack = MonadReaders [StackElement]
 
-instance HasStack [StackElement] where stack = id
+withStack :: (Monad m, MonadReaders [StackElement] m) => ([StackElement] -> m a) -> m a
+withStack f = ask >>= f
 
-withStack :: (Monad m, MonadReader r m, HasStack r) => ([StackElement] -> m a) -> m a
-withStack f = view stack >>= f
+push :: MonadReaders [StackElement] m => FieldType -> Con -> Dec -> m a -> m a
+push fld con dec = local (\stk -> StackElement fld con dec : stk)
 
-push :: forall r m a. (MonadReader r m, HasStack r) => FieldType -> Con -> Dec -> m a -> m a
-push fld con dec action = local f action
-    where f :: r -> r
-          f r = set stack (StackElement fld con dec : view stack r) r
-
-traceIndented :: (MonadReader r m, HasStack r) => String -> m ()
+traceIndented :: MonadReaders [StackElement] m => String -> m ()
 traceIndented s = withStack $ \stk -> trace (replicate (length stk) ' ' ++ s) (return ())
 
 prettyStack :: [StackElement] -> String
@@ -91,11 +89,16 @@ prettyStack = prettyStack' . reverse
       prettyType typ = "(" ++ show typ ++ ")"
 
 -- | Push the stack and process the field.
-foldField :: (MonadReader r m, HasStack r) => (FieldType -> m a) -> Dec -> Con -> FieldType -> m a
+foldField :: MonadReaders [StackElement] m => (FieldType -> m r) -> Dec -> Con -> FieldType -> m r
 foldField doField dec con fld = push fld con dec $ doField fld
 
+type StackT m = ReaderT [StackElement] m
+
+execStackT :: Monad m => StackT m a -> m a
+execStackT action = runReaderT action []
+
 -- | Re-implementation of stack accessor in terms of stackLens
-stackAccessor :: (Quasi m, (MonadReader r m, HasStack r)) => ExpQ -> Type -> m Exp
+stackAccessor :: (Quasi m, MonadReaders [StackElement] m) => ExpQ -> Type -> m Exp
 stackAccessor value typ0 =
     withStack f
     where
@@ -105,7 +108,7 @@ stackAccessor value typ0 =
         Just typ <- stackType
         runQ [| view $(pure lns) $value :: $(pure typ) |]
 
-stackType :: (MonadReader r m, HasStack r) => m (Maybe Type)
+stackType :: MonadReaders [StackElement] m => m (Maybe Type)
 stackType =
     withStack (return . f)
     where
@@ -150,9 +153,9 @@ fieldLens e@(StackElement fld con _) =
 -- The only reason for this function is backwards compatibility, the
 -- fields should be changed so they begin with _ and the regular
 -- makeLenses should be used.
-makeLenses' :: forall s m. (DsMonad m, MonadState s m, HasExpandMap s) => (Type -> m (Set Type)) -> [Name] -> m [Dec]
+makeLenses' :: forall m. (DsMonad m, MonadStates ExpandMap m) => (Type -> m (Set Type)) -> [Name] -> m [Dec]
 makeLenses' extraTypes typeNames =
-    execWriterT $ flip runReaderT [] $ makeTypeInfo (lift . lift . extraTypes) st >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges TGV) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
+    execWriterT $ execStackT $ makeTypeInfo (lift . lift . extraTypes) st >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges TGV) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
     where
       st = map ConT typeNames
 
@@ -164,7 +167,7 @@ makeLenses' extraTypes typeNames =
       doCons dec typeName cons = mapM_ (\ con -> mapM_ (foldField (doField typeName) dec con) (constructorFieldTypes con)) cons
 
       -- (mkName $ nameBase $ tName dec) dec lensNamer) >>= tell
-      doField :: Name -> FieldType -> ReaderT [StackElement] (WriterT [Dec] m) ()
+      doField :: Name -> FieldType -> StackT (WriterT [Dec] m) ()
       doField typeName (Named (fieldName, _, fieldType)) =
           doFieldType typeName fieldName fieldType
       doField _ _ = return ()

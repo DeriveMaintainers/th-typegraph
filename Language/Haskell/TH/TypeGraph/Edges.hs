@@ -33,8 +33,8 @@ import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
 import Control.Monad (filterM)
-import Control.Monad.Reader (ask, MonadReader)
-import Control.Monad.State (MonadState, modify, execStateT, StateT)
+import Control.Monad.Readers (ask, MonadReaders)
+import Control.Monad.States (MonadStates, modify, execStateT, StateT)
 import Control.Monad.Trans (lift)
 import Data.Foldable
 import Data.List as List (filter, intercalate, map)
@@ -45,9 +45,9 @@ import Data.Set as Set (delete, empty, filter, insert, map, member, fromList, Se
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.PprLib (ptext)
-import Language.Haskell.TH.TypeGraph.Expand (E(E), expandType, HasExpandMap)
+import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap, expandType)
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
-import Language.Haskell.TH.TypeGraph.TypeInfo (HasTypeInfo(..), infoMap, typeSet, allVertices, fieldVertex, typeVertex')
+import Language.Haskell.TH.TypeGraph.TypeInfo (TypeInfo, infoMap, typeSet, allVertices, fieldVertex, typeVertex')
 import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, vsimple)
 import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
@@ -59,7 +59,7 @@ type GraphEdges key = Map key (Set key)
 -- fields, build and return the GraphEdges relation on TypeGraphVertex.
 -- This is not a recursive function, it stops when it reaches the field
 -- types.
-typeGraphEdges :: forall r s m. (DsMonad m, Functor m, MonadReader r m, HasTypeInfo r, MonadState s m, HasExpandMap s) => m (GraphEdges TGV)
+typeGraphEdges :: forall m. (DsMonad m, Functor m, MonadReaders TypeInfo m, MonadStates ExpandMap m) => m (GraphEdges TGV)
 typeGraphEdges = do
   execStateT (view typeSet <$> ask >>= mapM_ (\t -> lift (expandType t) >>= doType)) (mempty :: GraphEdges TGV)
     where
@@ -67,7 +67,7 @@ typeGraphEdges = do
         vs <- allVertices Nothing typ
         mapM_ node vs
         case typ of
-          E (ConT tname) -> view (typeInfo . infoMap) >>= \ti -> doInfo vs (ti ! tname)
+          E (ConT tname) -> ask >>= \(x :: TypeInfo) -> doInfo vs (view infoMap x ! tname)
           E (AppT typ1 typ2) -> do
             v1 <- typeVertex' (E typ1)
             v2 <- typeVertex' (E typ2)

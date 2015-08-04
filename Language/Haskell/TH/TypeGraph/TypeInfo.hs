@@ -11,8 +11,7 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.TH.TypeGraph.TypeInfo
     ( -- * Type and builders
-      TypeInfo -- , startTypes, fields, infoMap, synonyms, typeSet
-    , HasTypeInfo(..)
+      TypeInfo, startTypes, fields, infoMap, synonyms, typeSet
     , makeTypeInfo
     -- * Update
     , typeVertex
@@ -27,11 +26,9 @@ module Language.Haskell.TH.TypeGraph.TypeInfo
 import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
-import Control.Monad.Reader (MonadReader)
-import Control.Monad.State (execStateT, StateT)
--- import Control.Monad.Readers (ask, MonadReaders)
--- import Control.Monad.States (execStateT, MonadStates(get, put), StateT)
+import Control.Monad.Readers (ask, MonadReaders)
 import Control.Monad.Trans as Monad
+import Control.Monad.States (execStateT, MonadStates(get, put), StateT)
 import Data.Foldable as Foldable (mapM_)
 import Data.List as List (intercalate, map)
 import Data.Map as Map (findWithDefault, insert, insertWith, Map, toList)
@@ -42,7 +39,7 @@ import Language.Haskell.TH.Desugar as DS (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax as TH (Lift(lift), Quasi(..))
-import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap, expandType, HasExpandMap(expandMap))
+import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap, expandType)
 import Language.Haskell.TH.TypeGraph.Prelude (pprint')
 import Language.Haskell.TH.TypeGraph.Shape (Field)
 import Language.Haskell.TH.TypeGraph.Vertex (TGV(..), TGVSimple(..), etype)
@@ -58,7 +55,7 @@ data TypeInfo
       -- 'Maybe' and the 'Int' in @Maybe Int@.
       , _infoMap :: Map Name Info
       -- ^ The Info record of all known named types
-      , _expanded :: ExpandMap
+      , _expanded :: Map Type (E Type)
       -- ^ Map of the expansion of all encountered types
       , _synonyms :: Map (E Type) (Set Name)
       -- ^ The types with all type synonyms replaced with their expansions.
@@ -76,14 +73,11 @@ instance Ppr TypeInfo where
           pps = intercalate "\n    " ("synonyms:" : concatMap (lines . (\ (typ, ns) -> pprint typ ++ " -> " ++ show ns)) (Map.toList s))
           ppf = intercalate "\n    " ("fields:" : concatMap (lines . (\ (typ, fs) -> pprint typ ++ " -> " ++ show fs)) (Map.toList f))
 
-$(makeClassy ''TypeInfo)
-instance HasExpandMap TypeInfo where expandMap = lens _expanded (\s x -> s {_expanded = x})
+$(makeLenses ''TypeInfo)
 
-{-
-instance (Monad m, MonadState s m, HasTypeInfo s) => MonadState s m where
+instance Monad m => MonadStates ExpandMap (StateT TypeInfo m) where
     get = use expanded
     put x = expanded .= x
--}
 
 instance Lift TypeInfo where
     lift (TypeInfo {_startTypes = st, _typeSet = t, _infoMap = i, _expanded = e, _synonyms = s, _fields = f}) =
@@ -167,7 +161,7 @@ makeTypeInfo extraTypes types =
                 , _synonyms = mempty
                 , _fields = mempty})
 
-allVertices :: (Functor m, DsMonad m, MonadReader r m, HasTypeInfo r) => Maybe Field -> E Type -> m (Set TGV)
+allVertices :: (Functor m, DsMonad m, MonadReaders TypeInfo m) => Maybe Field -> E Type -> m (Set TGV)
 allVertices (Just fld) etyp = singleton <$> fieldVertex fld etyp
 allVertices Nothing etyp = do
   v <- typeVertex etyp
@@ -178,9 +172,9 @@ allVertices Nothing etyp = do
 -- is specified it return s singleton, otherwise it returns a set
 -- containing a vertex one for the type on its own, and one for each
 -- field containing that type.
-fieldVertices :: (MonadReader r m, HasTypeInfo r) => TGVSimple -> m (Set TGV)
+fieldVertices :: MonadReaders TypeInfo m => TGVSimple -> m (Set TGV)
 fieldVertices v = do
-  fm <- view fields
+  fm <- view fields <$> ask
   let fs = Map.findWithDefault Set.empty (view etype v) fm
   return $ Set.map (\fld' -> TGV {_vsimple = v, _field = Just fld'}) fs
 
@@ -189,16 +183,16 @@ fieldVertices v = do
 -- vertex fld etyp = maybe (typeVertex etyp) (fieldVertex etyp) fld
 
 -- | Build a non-field vertex
-typeVertex :: (MonadReader r m, HasTypeInfo r) => E Type -> m TGVSimple
+typeVertex :: MonadReaders TypeInfo m => E Type -> m TGVSimple
 typeVertex etyp = do
-  sm <- view synonyms
+  sm <- view synonyms <$> ask
   return $ TGVSimple {_syns = Map.findWithDefault Set.empty etyp sm, _etype = etyp}
 
-typeVertex' :: (MonadReader r m, HasTypeInfo r) => E Type -> m TGV
+typeVertex' :: MonadReaders TypeInfo m => E Type -> m TGV
 typeVertex' etyp = do
   v <- typeVertex etyp
   return $ TGV {_vsimple = v, _field = Nothing}
 
 -- | Build a vertex associated with a field
-fieldVertex :: (MonadReader r m, HasTypeInfo r) => Field -> E Type -> m TGV
+fieldVertex :: MonadReaders TypeInfo m => Field -> E Type -> m TGV
 fieldVertex fld' etyp = typeVertex etyp >>= \v -> return $ TGV {_vsimple = v, _field = Just fld'}
