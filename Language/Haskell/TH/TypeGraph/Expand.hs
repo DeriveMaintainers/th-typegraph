@@ -24,12 +24,15 @@
 module Language.Haskell.TH.TypeGraph.Expand
     ( E(E, unE)
     , ExpandMap
+    , HasExpandMap(expandMap)
     , expandType
     , expandPred
     , expandClassP
     ) where
 
-import Control.Monad.States (MonadStates(get), modify)
+-- import Control.Monad.States (MonadStates(get), modify)
+import Control.Monad.State (MonadState)
+import Control.Lens
 import Data.Map as Map (Map, lookup, insert)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
@@ -50,21 +53,25 @@ instance Lift (E Type) where
 -- | The state type used to memoize expansions.
 type ExpandMap = Map Type (E Type)
 
+class HasExpandMap s where expandMap :: Lens' s ExpandMap
+
+instance HasExpandMap ExpandMap where expandMap = id
+
 -- | Apply the th-desugar expand function to a 'Type' and mark it as expanded.
-expandType :: (DsMonad m, MonadStates ExpandMap m)  => Type -> m (E Type)
+expandType :: (DsMonad m, MonadState s m, HasExpandMap s)  => Type -> m (E Type)
 expandType typ = do
-  get >>= maybe expandType' return . Map.lookup typ
+  use expandMap >>= maybe expandType' return . Map.lookup typ
     where
       expandType' =
           do e <- E <$> DS.typeToTH <$> (DS.dsType typ >>= DS.expand)
-             modify (Map.insert typ e)
+             expandMap %= (Map.insert typ e)
              return e
 
 -- | Apply the th-desugar expand function to a 'Pred' and mark it as expanded.
 -- Note that the definition of 'Pred' changed in template-haskell-2.10.0.0.
-expandPred :: (DsMonad m, MonadStates ExpandMap m)  => Type -> m (E Type)
+expandPred :: (DsMonad m, MonadState s m, HasExpandMap s)  => Type -> m (E Type)
 expandPred = expandType
 
 -- | Expand a list of 'Type' and build an expanded 'ClassP' 'Pred'.
-expandClassP :: forall m. (DsMonad m, MonadStates ExpandMap m)  => Name -> [Type] -> m (E Type)
+expandClassP :: forall s m. (DsMonad m, MonadState s m, HasExpandMap s)  => Name -> [Type] -> m (E Type)
 expandClassP className typeParameters = (expandType $ foldl AppT (ConT className) typeParameters) :: m (E Type)

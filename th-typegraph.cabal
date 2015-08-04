@@ -26,7 +26,6 @@ library
     haskell-src-exts,
     lens,
     mtl,
-    mtl-unleashed >= 0.2.1,
     set-extra,
     syb,
     template-haskell >= 2.10,
@@ -51,7 +50,7 @@ test-suite th-typegraph-tests
   hs-source-dirs:   test
   main-is:          Tests.hs
   build-depends:    array, base, bytestring, containers, data-default, deepseq, ghc-prim,
-                    hspec, hspec-core, lens, mtl, mtl-unleashed, syb, template-haskell, text,
+                    hspec, hspec-core, lens, mtl, syb, template-haskell, text,
                     th-typegraph, th-desugar, th-orphans, th-reify-many
   default-language: Haskell2010
 

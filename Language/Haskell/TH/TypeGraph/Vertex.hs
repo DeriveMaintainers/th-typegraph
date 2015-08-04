@@ -5,6 +5,7 @@ module Language.Haskell.TH.TypeGraph.Vertex
     ( TypeGraphVertex(..)
     , TGV(..), field, vsimple
     , TGVSimple(..), syns, etype
+    , HasVertexSet(vertexSet)
     ) where
 
 import Control.Lens
@@ -37,6 +38,10 @@ data TGVSimple
 
 $(makeLenses ''TGV)
 $(makeLenses ''TGVSimple)
+
+class HasVertexSet s where vertexSet :: Lens' s (Set TGV)
+
+instance HasVertexSet (Set TGV) where vertexSet = id
 
 instance Ppr TGVSimple where
     ppr (TGVSimple {_syns = ns, _etype = typ}) =
