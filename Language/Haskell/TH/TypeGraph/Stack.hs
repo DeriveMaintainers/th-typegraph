@@ -30,7 +30,7 @@ module Language.Haskell.TH.TypeGraph.Stack
 
 import Control.Applicative
 import Control.Category ((.))
-import Control.Lens (iso, Lens', lens, set, view)
+import Control.Lens as Lens (iso, Lens', lens, set, view)
 import Control.Monad.Readers (MonadReaders(ask, local), ReaderT, runReaderT)
 import Control.Monad.States (MonadStates)
 import Control.Monad.Trans (lift)
@@ -97,6 +97,7 @@ type StackT m = ReaderT [StackElement] m
 execStackT :: Monad m => StackT m a -> m a
 execStackT action = runReaderT action []
 
+#if 0
 -- | Re-implementation of stack accessor in terms of stackLens
 stackAccessor :: (Quasi m, MonadReaders [StackElement] m) => ExpQ -> Type -> m Exp
 stackAccessor value typ0 =
@@ -107,6 +108,19 @@ stackAccessor value typ0 =
         lns <- runQ $ stackLens stk
         Just typ <- stackType
         runQ [| view $(pure lns) $value :: $(pure typ) |]
+#else
+-- | Return a lambda function that turns a value of Type typ0 into the
+-- type implied by the stack elements.
+stackAccessor :: (Quasi m, MonadReaders [StackElement] m) => m Exp
+stackAccessor =
+    withStack f
+    where
+      f [] = runQ [|id|]
+      f stk = do
+        lns <- runQ $ stackLens stk
+        Just typ <- stackType
+        runQ [| \x -> (Lens.view $(pure lns) x) :: $(pure typ) |]
+#endif
 
 stackType :: MonadReaders [StackElement] m => m (Maybe Type)
 stackType =
