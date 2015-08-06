@@ -14,15 +14,15 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.TH.TypeGraph.Lens
     ( makeLenses'
+    , lensNamePairs
     ) where
 
-import Control.Applicative
 import Control.Category ((.))
-import Control.Lens as Lens (Lens', lens, view)
+import Control.Lens as Lens (makeLensesFor, view)
 import Control.Monad.Readers (runReaderT)
 import Control.Monad.States (MonadStates)
 import Control.Monad.Trans (lift)
-import Control.Monad.Writer (WriterT, execWriterT, tell)
+import Control.Monad.Writer (execWriterT, tell)
 import Data.Map as Map (keys)
 import Data.Set (Set)
 import Language.Haskell.Exts.Syntax ()
@@ -32,8 +32,7 @@ import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax hiding (lift)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges, typeGraphEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap)
-import Language.Haskell.TH.TypeGraph.Shape (FieldType(..), constructorFieldTypes)
-import Language.Haskell.TH.TypeGraph.Stack (execStackT, foldField, lensNamer, StackT)
+import Language.Haskell.TH.TypeGraph.Stack (execStackT, lensNamer)
 import Language.Haskell.TH.TypeGraph.TypeInfo (makeTypeInfo)
 import Language.Haskell.TH.TypeGraph.Vertex (etype, TGV)
 import Prelude hiding ((.))
@@ -46,31 +45,35 @@ import Prelude hiding ((.))
 -- makeLensesFor should be used instead.
 makeLenses' :: forall m. (DsMonad m, MonadStates ExpandMap m) => (Type -> m (Set Type)) -> [Name] -> m [Dec]
 makeLenses' extraTypes typeNames =
-    execWriterT $ execStackT $ makeTypeInfo (lift . lift . extraTypes) st >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges TGV) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
+    execWriterT $ execStackT $ makeTypeInfo (lift . lift . extraTypes) (map ConT typeNames) >>=
+                               runReaderT typeGraphEdges >>= \ (g :: GraphEdges TGV) ->
+                               mapM doType . map (view etype) . Map.keys . simpleEdges $ g
     where
-      st = map ConT typeNames
-
-      doType (E (ConT name)) = qReify name >>= doInfo
+      doType (E (ConT tname)) = qReify tname >>= doInfo
       doType _ = return ()
-      doInfo (TyConI dec@(NewtypeD _ typeName _ con _)) = doCons dec typeName [con]
-      doInfo (TyConI dec@(DataD _ typeName _ cons _)) = doCons dec typeName cons
+      doInfo (TyConI (NewtypeD _ tname _ _ _)) = lensNamePairs namer tname >>= \pairs -> runQ (makeLensesFor pairs tname) >>= tell
+      doInfo (TyConI (DataD _ tname _ _ _)) = lensNamePairs namer tname >>= \pairs -> runQ (makeLensesFor pairs tname) >>= tell
       doInfo _ = return ()
-      doCons dec typeName cons = mapM_ (\ con -> mapM_ (foldField (doField typeName) dec con) (constructorFieldTypes con)) cons
 
-      -- (mkName $ nameBase $ tName dec) dec lensNamer) >>= tell
-      doField :: Name -> FieldType -> StackT (WriterT [Dec] m) ()
-      doField typeName (Named (fieldName, _, fieldType)) =
-          doFieldType typeName fieldName fieldType
-      doField _ _ = return ()
-      doFieldType typeName fieldName (ForallT _ _ typ) = doFieldType typeName fieldName typ
-      doFieldType typeName fieldName fieldType@(ConT fieldTypeName) = qReify fieldTypeName >>= doFieldInfo typeName fieldName fieldType
-      doFieldType typeName fieldName fieldType = makeLens typeName fieldName fieldType
-      doFieldInfo typeName fieldName fieldType (TyConI _fieldTypeDec) = makeLens typeName fieldName fieldType
-      doFieldInfo _ _ _ (PrimTyConI _ _ _) = return ()
-      doFieldInfo _ _ _ info = error $ "makeLenses - doFieldType: " ++ show info
+namer :: Name -> Name -> Name -> (String, String)
+namer _tname _cname fname = (nameBase fname, lensNamer (nameBase fname))
 
-      makeLens typeName fieldName fieldType =
-          do let lensName = mkName (lensNamer (nameBase fieldName))
-             sig <- runQ $ sigD lensName (runQ [t|Lens' $(conT typeName) $(pure fieldType)|])
-             val <- runQ $ valD (varP lensName) (normalB (runQ [|lens $(varE fieldName) (\ s x -> $(recUpdE [|s|] [ (,) <$> pure fieldName <*> [|x|] ]))|])) []
-             return [sig, val] >>= tell
+-- | Build the list of pairs used by makeLensesFor.
+lensNamePairs :: Quasi m => (Name -> Name -> Name -> (String, String)) -> Name -> m [(String, String)]
+lensNamePairs namefn tname =
+    qReify tname >>= execWriterT . doInfo
+    where
+      doInfo (TyConI dec) = doDec dec
+      doInfo _ = return ()
+      doDec (NewtypeD _ _ _ con _) = doCon con
+      doDec (DataD _ _ _ cons _) = mapM_ doCon cons
+      doDec (TySynD _ _ _) = return ()
+      doDec _ = return ()
+      doCon (ForallC _ _ con) = doCon con
+      doCon (RecC cname flds) = mapM_ (doField cname) flds
+      doCon (NormalC _ _) = return ()
+      doCon (InfixC _ _ _) = return ()
+      doField cname (fname, _, (ConT fTypeName)) = qReify fTypeName >>= doFieldTypeName cname fname
+      doField cname (fname, _, _) = tell [namefn tname cname fname]
+      doFieldTypeName _cname _fname (PrimTyConI _ _ _) = return ()
+      doFieldTypeName cname fname _ = tell [namefn tname cname fname]
