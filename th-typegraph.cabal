@@ -38,6 +38,7 @@ library
     Language.Haskell.TH.TypeGraph.Edges
     Language.Haskell.TH.TypeGraph.Expand
     Language.Haskell.TH.TypeGraph.Free
+    Language.Haskell.TH.TypeGraph.Lens
     Language.Haskell.TH.TypeGraph.Prelude
     Language.Haskell.TH.TypeGraph.Shape
     Language.Haskell.TH.TypeGraph.Stack

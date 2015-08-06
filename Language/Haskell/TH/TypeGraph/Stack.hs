@@ -24,34 +24,24 @@ module Language.Haskell.TH.TypeGraph.Stack
     , push
       -- * Stack operations
     , stackAccessor
-    , makeLenses'
     , traceIndented
+    , lensNamer
     ) where
 
 import Control.Applicative
 import Control.Category ((.))
 import Control.Lens as Lens (iso, Lens', lens, set, view)
 import Control.Monad.Readers (MonadReaders(ask, local), ReaderT, runReaderT)
-import Control.Monad.States (MonadStates)
-import Control.Monad.Trans (lift)
-import Control.Monad.Writer (WriterT, execWriterT, tell)
 import Data.Char (toUpper)
 import Data.Generics (Data, Typeable)
-import Data.Map as Map (keys)
 import Data.Maybe (fromMaybe)
-import Data.Set (Set)
 import Debug.Trace (trace)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
-import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax hiding (lift)
-import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges, typeGraphEdges)
-import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap)
 import Language.Haskell.TH.TypeGraph.Prelude (constructorName)
 import Language.Haskell.TH.TypeGraph.Shape (FieldType(..), fName, fType, constructorFieldTypes)
-import Language.Haskell.TH.TypeGraph.TypeInfo (makeTypeInfo)
-import Language.Haskell.TH.TypeGraph.Vertex (etype, TGV)
 import Prelude hiding ((.))
 
 -- | The information required to extact a field value from a value.
@@ -97,18 +87,6 @@ type StackT m = ReaderT [StackElement] m
 execStackT :: Monad m => StackT m a -> m a
 execStackT action = runReaderT action []
 
-#if 0
--- | Re-implementation of stack accessor in terms of stackLens
-stackAccessor :: (Quasi m, MonadReaders [StackElement] m) => ExpQ -> Type -> m Exp
-stackAccessor value typ0 =
-    withStack f
-    where
-      f [] = runQ value
-      f stk = do
-        lns <- runQ $ stackLens stk
-        Just typ <- stackType
-        runQ [| view $(pure lns) $value :: $(pure typ) |]
-#else
 -- | Return a lambda function that turns a value of Type typ0 into the
 -- type implied by the stack elements.
 stackAccessor :: (Quasi m, MonadReaders [StackElement] m) => m Exp
@@ -120,7 +98,6 @@ stackAccessor =
         lns <- runQ $ stackLens stk
         Just typ <- stackType
         runQ [| \x -> (Lens.view $(pure lns) x) :: $(pure typ) |]
-#endif
 
 stackType :: MonadReaders [StackElement] m => m (Maybe Type)
 stackType =
@@ -159,44 +136,6 @@ fieldLens e@(StackElement fld con _) =
                              -- \ x (Con a b c _ d e) -> Con a b c x d e
                              $(lamE [conP cname (map varP as), varP f] (foldl appE (conE cname) (set (nthLens fieldPos) (varE f) (map varE as)))) |]
        [| $(pure lns) {- :: Lens $(pure top) $(pure (fType fld)) -} |]
-
--- | Generate lenses to access the fields of the row types.  Like
--- Control.Lens.TH.makeLenses, but makes lenses for every field, and
--- instead of removing the prefix '_' to form the lens name it adds
--- the prefix "lens" and capitalizes the first letter of the field.
--- The only reason for this function is backwards compatibility, the
--- fields should be changed so they begin with _ and the regular
--- makeLenses should be used.
-makeLenses' :: forall m. (DsMonad m, MonadStates ExpandMap m) => (Type -> m (Set Type)) -> [Name] -> m [Dec]
-makeLenses' extraTypes typeNames =
-    execWriterT $ execStackT $ makeTypeInfo (lift . lift . extraTypes) st >>= runReaderT typeGraphEdges >>= \ (g :: GraphEdges TGV) -> (mapM doType . map (view etype) . Map.keys . simpleEdges $ g)
-    where
-      st = map ConT typeNames
-
-      doType (E (ConT name)) = qReify name >>= doInfo
-      doType _ = return ()
-      doInfo (TyConI dec@(NewtypeD _ typeName _ con _)) = doCons dec typeName [con]
-      doInfo (TyConI dec@(DataD _ typeName _ cons _)) = doCons dec typeName cons
-      doInfo _ = return ()
-      doCons dec typeName cons = mapM_ (\ con -> mapM_ (foldField (doField typeName) dec con) (constructorFieldTypes con)) cons
-
-      -- (mkName $ nameBase $ tName dec) dec lensNamer) >>= tell
-      doField :: Name -> FieldType -> StackT (WriterT [Dec] m) ()
-      doField typeName (Named (fieldName, _, fieldType)) =
-          doFieldType typeName fieldName fieldType
-      doField _ _ = return ()
-      doFieldType typeName fieldName (ForallT _ _ typ) = doFieldType typeName fieldName typ
-      doFieldType typeName fieldName fieldType@(ConT fieldTypeName) = qReify fieldTypeName >>= doFieldInfo typeName fieldName fieldType
-      doFieldType typeName fieldName fieldType = makeLens typeName fieldName fieldType
-      doFieldInfo typeName fieldName fieldType (TyConI _fieldTypeDec) = makeLens typeName fieldName fieldType
-      doFieldInfo _ _ _ (PrimTyConI _ _ _) = return ()
-      doFieldInfo _ _ _ info = error $ "makeLenses - doFieldType: " ++ show info
-
-      makeLens typeName fieldName fieldType =
-          do let lensName = mkName (lensNamer (nameBase fieldName))
-             sig <- runQ $ sigD lensName (runQ [t|Lens' $(conT typeName) $(pure fieldType)|])
-             val <- runQ $ valD (varP lensName) (normalB (runQ [|lens $(varE fieldName) (\ s x -> $(recUpdE [|s|] [ (,) <$> pure fieldName <*> [|x|] ]))|])) []
-             return [sig, val] >>= tell
 
 -- | Given a field name, return the name to use for the corresponding lens.
 lensNamer :: String -> String
