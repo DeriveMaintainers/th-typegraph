@@ -13,7 +13,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.TH.TypeGraph.Stack
-    ( StackElement(..)
+    ( TypeStack(..)
+    , topType
+    , typeStack
+    , StackElement(..)
     , prettyStack
     , foldField
       -- * Stack+instance map monad
@@ -30,7 +33,7 @@ module Language.Haskell.TH.TypeGraph.Stack
 
 import Control.Applicative
 import Control.Category ((.))
-import Control.Lens as Lens (iso, Lens', lens, set, view)
+import Control.Lens as Lens -- (iso, Lens', lens, set, view, (%=), (.~))
 import Control.Monad.Readers (MonadReaders(ask, local), ReaderT, runReaderT)
 import Data.Char (toUpper)
 import Data.Generics (Data, Typeable)
@@ -49,19 +52,29 @@ import Prelude hiding ((.))
 -- we only need the field names.
 data StackElement = StackElement FieldType Con Dec deriving (Eq, Show, Data, Typeable)
 
-type HasStack = MonadReaders [StackElement]
+-- | A stack describes a path from a top type down through fields of
+-- its component types.
+data TypeStack
+    = TypeStack
+      { _topType :: Type
+      , _typeStack :: [StackElement]
+      } deriving (Eq, Show, Data, Typeable)
 
-withStack :: (Monad m, MonadReaders [StackElement] m) => ([StackElement] -> m a) -> m a
+$(makeLenses ''TypeStack)
+
+type HasStack = MonadReaders TypeStack
+
+withStack :: (Monad m, MonadReaders TypeStack m) => (TypeStack -> m a) -> m a
 withStack f = ask >>= f
 
-push :: MonadReaders [StackElement] m => FieldType -> Con -> Dec -> m a -> m a
-push fld con dec = local (\stk -> StackElement fld con dec : stk)
+push :: MonadReaders TypeStack m => FieldType -> Con -> Dec -> m a -> m a
+push fld con dec = local (over typeStack (\xs -> StackElement fld con dec : xs))
 
-traceIndented :: MonadReaders [StackElement] m => String -> m ()
-traceIndented s = withStack $ \stk -> trace (replicate (length stk) ' ' ++ s) (return ())
+traceIndented :: MonadReaders TypeStack m => String -> m ()
+traceIndented s = withStack $ \stk -> trace (replicate (length (view typeStack stk)) ' ' ++ s) (return ())
 
-prettyStack :: [StackElement] -> String
-prettyStack = prettyStack' . reverse
+prettyStack :: TypeStack -> String
+prettyStack stk = prettyType (view topType stk) ++ " → " ++ prettyStack' (reverse (view typeStack stk))
     where
       prettyStack' :: [StackElement] -> String
       prettyStack' [] = "(empty)"
@@ -79,38 +92,44 @@ prettyStack = prettyStack' . reverse
       prettyType typ = "(" ++ show typ ++ ")"
 
 -- | Push the stack and process the field.
-foldField :: MonadReaders [StackElement] m => (FieldType -> m r) -> Dec -> Con -> FieldType -> m r
+foldField :: MonadReaders TypeStack m => (FieldType -> m r) -> Dec -> Con -> FieldType -> m r
 foldField doField dec con fld = push fld con dec $ doField fld
 
-type StackT m = ReaderT [StackElement] m
+type StackT m = ReaderT TypeStack m
 
-execStackT :: Monad m => StackT m a -> m a
-execStackT action = runReaderT action []
+execStackT :: Monad m => StackT m a -> Type -> m a
+execStackT action type0 = runReaderT action (TypeStack {_topType = type0, _typeStack = []})
 
 -- | Return a lambda function that turns a value of Type typ0 into the
 -- type implied by the stack elements.
-stackAccessor :: (Quasi m, MonadReaders [StackElement] m) => m Exp
+stackAccessor :: (Quasi m, MonadReaders TypeStack m) => m Exp
 stackAccessor =
     withStack f
     where
-      f [] = runQ [|id|]
+      -- It works without this case, but this way the code is a little
+      -- neater.  FIXME: Actually, we should have a stackView function
+      -- that only builds the getter, we are just throwing away the
+      -- lens's setter here.
+      f stk | null (view typeStack stk) = runQ [|id|]
       f stk = do
         lns <- runQ $ stackLens stk
         Just typ <- stackType
         runQ [| \x -> (Lens.view $(pure lns) x) :: $(pure typ) |]
 
-stackType :: MonadReaders [StackElement] m => m (Maybe Type)
+stackType :: MonadReaders TypeStack m => m (Maybe Type)
 stackType =
-    withStack (return . f)
+    withStack (return . f . view typeStack)
     where
       f [] = Nothing
       f (StackElement fld _ _ : _) = Just (fType fld)
 
 -- | Return an expression of a lens for the value described by the
 -- stack.
-stackLens :: [StackElement] -> Q Exp
-stackLens [] = [| iso id id |]
-stackLens xs = mapM fieldLens xs >>= foldl1 (\ a b -> [|$b . $a|]) . map return
+stackLens :: TypeStack -> Q Exp
+stackLens stk =
+    case view typeStack stk of
+      [] -> [| iso id id |]
+      xs -> mapM fieldLens xs >>= foldl1 (\ a b -> [|$b . $a|]) . map return
 
 nthLens :: Int -> Lens' [a] a
 nthLens n = lens (\ xs -> xs !! n) (\ xs x -> take (n - 1) xs ++ [x] ++ drop n xs)

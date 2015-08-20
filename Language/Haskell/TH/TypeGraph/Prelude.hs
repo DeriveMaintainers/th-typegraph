@@ -18,7 +18,7 @@ module Language.Haskell.TH.TypeGraph.Prelude
     , L(L)
     ) where
 
-import Control.Lens
+import Control.Lens hiding (cons)
 import Data.Generics (Data, everywhere, mkT)
 import Data.Graph as Graph
 import Data.List (intersperse)

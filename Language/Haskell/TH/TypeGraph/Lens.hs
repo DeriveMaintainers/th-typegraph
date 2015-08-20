@@ -31,7 +31,7 @@ import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax hiding (lift)
 import Language.Haskell.TH.TypeGraph.Edges (simpleEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap)
-import Language.Haskell.TH.TypeGraph.Stack (lensNamer, StackElement)
+import Language.Haskell.TH.TypeGraph.Stack (lensNamer)
 import Language.Haskell.TH.TypeGraph.TypeGraph (edges, TypeGraph)
 import Language.Haskell.TH.TypeGraph.Vertex (etype)
 import Prelude hiding ((.))
@@ -42,7 +42,7 @@ import Prelude hiding ((.))
 -- the prefix "lens" and capitalizes the first letter of the field.
 -- The only reason for this function is backwards compatibility,
 -- makeLensesFor should be used instead.
-makeTypeGraphLenses :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders [StackElement] m, MonadReaders TypeGraph m) =>
+makeTypeGraphLenses :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m) =>
                        m [Dec]
 makeTypeGraphLenses =
     execWriterT $ Readers.view edges >>= mapM doType . map (view etype) . Map.keys . simpleEdges
