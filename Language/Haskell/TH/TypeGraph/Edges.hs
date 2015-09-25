@@ -37,7 +37,8 @@ import Control.Monad.Readers (ask, MonadReaders)
 import Control.Monad.States (MonadStates, modify, execStateT, StateT)
 import Control.Monad.Trans (lift)
 import Data.Foldable
-import Data.List as List (filter, intercalate, map)
+import Data.Function (on)
+import Data.List as List (filter, intercalate, map, sortBy)
 import Data.Map as Map ((!), alter, delete, filterWithKey, fromList, keys, lookup, map, Map, mapKeysWith, mapWithKey)
 import qualified Data.Map as Map (toList)
 import Data.Maybe (mapMaybe)
@@ -115,12 +116,12 @@ typeGraphEdges = do
                 g :: (Maybe (Set TGV) -> Maybe (Set TGV))
                 g = Just . maybe (singleton v2) (Set.insert v2)
 
-instance Ppr key => Ppr (GraphEdges key) where
+instance (Ppr key, Show key) => Ppr (GraphEdges key) where
     ppr x =
         ptext $ intercalate "\n  " $
           "edges:" : (List.map
                        (\(k, ks) -> intercalate "\n    " ((pprint' k ++ " ->" ++ if null ks then " []" else "") : List.map pprint' (Set.toList ks)))
-                       (Map.toList x))
+                       (sortBy (compare `on` show) (Map.toList x)))
 
 -- | Isolate and remove matching nodes
 cut :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges a -> GraphEdges a
