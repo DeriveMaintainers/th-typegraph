@@ -16,6 +16,7 @@ module Language.Haskell.TH.TypeGraph.Prelude
     , adjacent'
     , reachable'
     , L(L)
+    , friendlyNames
     ) where
 
 import Control.Lens hiding (cons)
@@ -27,7 +28,7 @@ import Data.Maybe (fromMaybe)
 import Data.Set as Set (fromList, Set, toList)
 import Language.Haskell.TH
 import Language.Haskell.TH.PprLib (ptext, hcat)
-import Language.Haskell.TH.Syntax (Lift(lift), Quasi(qReify))
+import Language.Haskell.TH.Syntax (Lift(lift), Name(Name), NameFlavour(NameS), Quasi(qReify))
 
 instance Ppr () where
     ppr () = ptext "()"
@@ -127,3 +128,14 @@ reachable' (g, vf, kf) k =
     where
       reachableVerts = Graph.reachable g v
       v = fromMaybe (error "Language.Haskell.TH.TypeGraph.Prelude.reachable") (kf k)
+
+-- | Make a template haskell value more human reader friendly.  The
+-- result almost certainly won't be compilable.  That's ok, though,
+-- because the input is usually uncompilable - it imports hidden modules,
+-- uses infix operators in invalid positions, puts module qualifiers in
+-- places where they are not allowed, and maybe other things.
+friendlyNames :: Data a => a -> a
+friendlyNames =
+    everywhere (mkT friendlyName)
+    where
+      friendlyName (Name x _) = Name x NameS -- Remove all module qualifiers
