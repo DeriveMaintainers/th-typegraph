@@ -35,6 +35,7 @@ import Control.Applicative
 import Control.Category ((.))
 import Control.Lens as Lens -- (iso, Lens', lens, set, view, (%=), (.~))
 import Control.Monad.Readers (MonadReaders(ask, local), ReaderT, runReaderT)
+--import Control.Monad.States (over')
 import Data.Char (toUpper)
 import Data.Generics (Data, Typeable)
 import Data.Maybe (fromMaybe)
@@ -67,8 +68,9 @@ type HasStack = MonadReaders TypeStack
 withStack :: (Monad m, MonadReaders TypeStack m) => (TypeStack -> m a) -> m a
 withStack f = ask >>= f
 
+-- | push an element onto the TypeStack in m
 push :: MonadReaders TypeStack m => FieldType -> Con -> Dec -> m a -> m a
-push fld con dec = local (over typeStack (\xs -> StackElement fld con dec : xs))
+push fld con dec action = local (\(stk :: TypeStack) -> set typeStack (StackElement fld con dec : view typeStack stk) stk) action
 
 traceIndented :: MonadReaders TypeStack m => String -> m ()
 traceIndented s = withStack $ \stk -> trace (replicate (length (view typeStack stk)) ' ' ++ s) (return ())

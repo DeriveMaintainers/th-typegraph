@@ -55,7 +55,7 @@ data TypeInfo
       -- 'Maybe' and the 'Int' in @Maybe Int@.
       , _infoMap :: Map Name Info
       -- ^ The Info record of all known named types
-      , _expanded :: Map Type (E Type)
+      , _expanded :: ExpandMap
       -- ^ Map of the expansion of all encountered types
       , _synonyms :: Map (E Type) (Set Name)
       -- ^ The types with all type synonyms replaced with their expansions.

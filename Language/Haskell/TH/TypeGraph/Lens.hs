@@ -19,8 +19,7 @@ module Language.Haskell.TH.TypeGraph.Lens
 
 import Control.Category ((.))
 import Control.Lens as Lens (makeLensesFor, view)
-import Control.Monad.Readers (MonadReaders)
-import qualified Control.Monad.Readers as Readers (view)
+import Control.Monad.Readers (MonadReaders, view')
 import Control.Monad.States (MonadStates)
 import Control.Monad.Writer (execWriterT, tell)
 import Data.Map as Map (keys)
@@ -45,7 +44,7 @@ import Prelude hiding ((.))
 makeTypeGraphLenses :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m) =>
                        m [Dec]
 makeTypeGraphLenses =
-    execWriterT $ Readers.view edges >>= mapM doType . map (view etype) . Map.keys . simpleEdges
+    execWriterT $ view' edges >>= mapM doType . map (view etype) . Map.keys . simpleEdges
     where
       doType (E (ConT tname)) = qReify tname >>= doInfo
       doType _ = return ()

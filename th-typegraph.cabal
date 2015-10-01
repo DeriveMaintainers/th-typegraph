@@ -1,5 +1,5 @@
 name:               th-typegraph
-version:            0.29
+version:            0.31
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
@@ -16,6 +16,11 @@ description:        Build a graph whose nodes are Types and whose edges represen
                     a subtype of (Int, Double), and so on.
 extra-source-files: test/Common.hs test/Tests.hs test/TypeGraph.hs test/Values.hs
 
+flag local-mtl-unleashed
+  Description: flag
+  Default: False
+  Manual: True
+
 library
   hs-source-dirs: .
   build-depends:
@@ -26,7 +31,6 @@ library
     haskell-src-exts,
     lens,
     mtl,
-    mtl-unleashed >= 0.2.1,
     set-extra,
     syb,
     template-haskell >= 2.10,
@@ -46,15 +50,24 @@ library
     Language.Haskell.TH.TypeGraph.TypeInfo
     Language.Haskell.TH.TypeGraph.Vertex
   default-language: Haskell2010
+  if flag(local-mtl-unleashed)
+    Hs-Source-Dirs: ../mtl-unleashed
+    Exposed-Modules:
+      Control.Monad.Readers
+      Control.Monad.States
+  else
+    Build-Depends: mtl-unleashed >= 0.4
 
 test-suite th-typegraph-tests
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
   main-is:          Tests.hs
   build-depends:    array, base, bytestring, containers, data-default, deepseq, ghc-prim,
-                    hspec, hspec-core, lens, mtl, mtl-unleashed, syb, template-haskell, text,
+                    hspec, hspec-core, lens, mtl, syb, template-haskell, text,
                     th-typegraph, th-desugar, th-orphans, th-reify-many
   default-language: Haskell2010
+  if !flag(local-mtl-unleashed)
+    Build-Depends: mtl-unleashed >= 0.4
 
 source-repository head
   type:     git

@@ -112,7 +112,7 @@ instance (Monad m, MonadReaders [StackElement] m) => MonadReaders [StackElement]
 instance Ppr TypeGraph where
     ppr tg = vcat [ptext "TypeGraph: ", ppr (view edges tg)]
 
-allPathStarts :: forall m. (DsMonad m, MonadStates (Map Type (E Type)) m, MonadReaders TypeGraph m) => m (Set TGV)
+allPathStarts :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m) => m (Set TGV)
 allPathStarts = do
   -- (g, vf, kf) <- graphFromMap <$> view edges
   (g, vf, kf) <- ask >>= return . view graph
@@ -126,14 +126,14 @@ view' lns = view lns <$> ask
 
 -- | Lenses represent steps in a path, but the start point is a type
 -- vertex and the endpoint is a field vertex.
-allLensKeys ::  (DsMonad m, MonadStates (Map Type (E Type)) m, MonadReaders TypeGraph m) => m (Map TGVSimple (Set TGV))
+allLensKeys ::  (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m) => m (Map TGVSimple (Set TGV))
 allLensKeys = do
   g <- view' graph
   -- gs <- view' gsimple
   allPathStarts >>= return . Map.fromListWith Set.union . List.map (\x -> (view vsimple x, Set.fromList (adjacent' g x))) . Set.toList
 
 -- | Paths go between simple types.
-allPathKeys :: (DsMonad m, MonadStates (Map Type (E Type)) m, MonadReaders TypeGraph m) => m (Map TGVSimple (Set TGVSimple))
+allPathKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m) => m (Map TGVSimple (Set TGVSimple))
 allPathKeys = do
   gs <- view' gsimple
   allPathStarts >>= return . Map.fromList . List.map (\x -> (x, Set.fromList (reachable' gs x))) . Set.toList . Set.map (view vsimple)
@@ -178,7 +178,7 @@ typeGraphVertex typ = do
         -- magnify typeInfo $ vertex Nothing typ'
 
 -- | Return the TGV associated with a particular type and field.
-typeGraphVertexOfField :: (MonadReaders TypeGraph m, MonadStates (Map Type (E Type)) m, DsMonad m) =>
+typeGraphVertexOfField :: (MonadReaders TypeGraph m, MonadStates ExpandMap m, DsMonad m) =>
                           (Name, Name, Either Int Name) -> Type -> m TGV
 typeGraphVertexOfField fld typ = do
         typ' <- expandType typ
@@ -202,7 +202,7 @@ instance Default (VertexStatus typ) where
 -- | Return the set of adjacent vertices according to the default type
 -- graph - i.e. the one determined only by the type definitions, not
 -- by any additional hinting function.
-adjacent :: forall m. (MonadReaders TypeGraph m, DsMonad m, MonadStates (Map Type (E Type)) m) => TGV -> m (Set TGV)
+adjacent :: forall m. (MonadReaders TypeGraph m, DsMonad m, MonadStates ExpandMap m) => TGV -> m (Set TGV)
 adjacent typ =
     case view (vsimple . etype) typ of
       E (ForallT _ _ typ') -> typeGraphVertex typ' >>= adjacent
