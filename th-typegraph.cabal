@@ -52,7 +52,7 @@ library
   default-language: Haskell2010
   if flag(local-mtl-unleashed)
     Build-Depends: transformers
-    Hs-Source-Dirs: ../mtl-unleashed
+    Hs-Source-Dirs: mtl-unleashed
     Exposed-Modules:
       Control.Monad.Readers
       Control.Monad.States
