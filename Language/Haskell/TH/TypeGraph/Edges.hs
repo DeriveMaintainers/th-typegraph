@@ -33,8 +33,9 @@ import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
 import Control.Monad (filterM)
-import Control.Monad.Readers (ask, MonadReaders)
-import Control.Monad.States (MonadStates, modify, execStateT, StateT)
+import Control.Monad.Readers (askPoly, MonadReaders)
+import Control.Monad.State (execStateT, StateT)
+import Control.Monad.States (MonadStates, modifyPoly)
 import Control.Monad.Trans (lift)
 import Data.Foldable
 import Data.Function (on)
@@ -62,13 +63,13 @@ type GraphEdges key = Map key (Set key)
 -- types.
 typeGraphEdges :: forall m. (DsMonad m, Functor m, MonadReaders TypeInfo m, MonadStates ExpandMap m) => m (GraphEdges TGV)
 typeGraphEdges = do
-  execStateT (view typeSet <$> ask >>= mapM_ (\t -> lift (expandType t) >>= doType)) (mempty :: GraphEdges TGV)
+  execStateT (view typeSet <$> askPoly >>= mapM_ (\t -> lift (expandType t) >>= doType)) (mempty :: GraphEdges TGV)
     where
       doType typ = do
         vs <- allVertices Nothing typ
         mapM_ node vs
         case typ of
-          E (ConT tname) -> ask >>= \(x :: TypeInfo) -> doInfo vs (view infoMap x ! tname)
+          E (ConT tname) -> askPoly >>= \(x :: TypeInfo) -> doInfo vs (view infoMap x ! tname)
           E (AppT typ1 typ2) -> do
             v1 <- typeVertex' (E typ1)
             v2 <- typeVertex' (E typ2)
@@ -107,10 +108,10 @@ typeGraphEdges = do
 
       node :: TGV -> StateT (GraphEdges TGV) m ()
       -- node v = pass (return ((), (Map.alter (Just . maybe (def, Set.empty) id) v)))
-      node v = modify (Map.alter (Just . maybe (Set.empty) id) v :: Map TGV (Set TGV) -> Map TGV (Set TGV))
+      node v = modifyPoly (Map.alter (Just . maybe (Set.empty) id) v :: Map TGV (Set TGV) -> Map TGV (Set TGV))
 
       edge :: TGV -> TGV -> StateT (GraphEdges TGV) m ()
-      edge v1 v2 = node v2 >> modify f
+      edge v1 v2 = node v2 >> modifyPoly f
           where f :: GraphEdges TGV -> GraphEdges TGV
                 f = Map.alter g v1
                 g :: (Maybe (Set TGV) -> Maybe (Set TGV))

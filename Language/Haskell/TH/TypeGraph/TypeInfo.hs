@@ -26,9 +26,10 @@ module Language.Haskell.TH.TypeGraph.TypeInfo
 import Data.Monoid (mempty)
 #endif
 import Control.Lens -- (makeLenses, view)
-import Control.Monad.Readers (ask, MonadReaders)
+import Control.Monad.Readers (askPoly, MonadReaders)
 import Control.Monad.Trans as Monad
-import Control.Monad.States (execStateT, MonadStates(get, put), StateT)
+import Control.Monad.State (execStateT, StateT)
+import Control.Monad.States (MonadStates(getPoly, putPoly))
 import Data.Foldable as Foldable (mapM_)
 import Data.List as List (intercalate, map)
 import Data.Map as Map (findWithDefault, insert, insertWith, Map, toList)
@@ -76,8 +77,8 @@ instance Ppr TypeInfo where
 $(makeLenses ''TypeInfo)
 
 instance Monad m => MonadStates ExpandMap (StateT TypeInfo m) where
-    get = use expanded
-    put x = expanded .= x
+    getPoly = use expanded
+    putPoly x = expanded .= x
 
 instance Lift TypeInfo where
     lift (TypeInfo {_startTypes = st, _typeSet = t, _infoMap = i, _expanded = e, _synonyms = s, _fields = f}) =
@@ -174,7 +175,7 @@ allVertices Nothing etyp = do
 -- field containing that type.
 fieldVertices :: MonadReaders TypeInfo m => TGVSimple -> m (Set TGV)
 fieldVertices v = do
-  fm <- view fields <$> ask
+  fm <- view fields <$> askPoly
   let fs = Map.findWithDefault Set.empty (view etype v) fm
   return $ Set.map (\fld' -> TGV {_vsimple = v, _field = Just fld'}) fs
 
@@ -185,7 +186,7 @@ fieldVertices v = do
 -- | Build a non-field vertex
 typeVertex :: MonadReaders TypeInfo m => E Type -> m TGVSimple
 typeVertex etyp = do
-  sm <- view synonyms <$> ask
+  sm <- view synonyms <$> askPoly
   return $ TGVSimple {_syns = Map.findWithDefault Set.empty etyp sm, _etype = etyp}
 
 typeVertex' :: MonadReaders TypeInfo m => E Type -> m TGV

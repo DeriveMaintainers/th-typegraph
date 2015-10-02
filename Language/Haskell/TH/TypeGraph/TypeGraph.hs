@@ -41,7 +41,7 @@ import Control.Applicative
 import Control.Lens
 -- import Control.Monad (when)
 import qualified Control.Monad.Reader as MTL (ask, ReaderT, runReaderT)
-import Control.Monad.Readers (MonadReaders(ask, local))
+import Control.Monad.Readers (MonadReaders(askPoly, localPoly))
 import Control.Monad.States (MonadStates)
 import Control.Monad.Trans (lift)
 import Data.Default (Default(def))
@@ -73,7 +73,7 @@ instance Ppr Vertex where
 -- | Build a TypeGraph given a set of edges and the TypeInfo environment
 makeTypeGraph :: MonadReaders TypeInfo m => (GraphEdges TGV) -> m TypeGraph
 makeTypeGraph es = do
-  ti <- ask
+  ti <- askPoly
   return $ TypeGraph
              { _typeInfo = ti
              , _edges = es
@@ -106,8 +106,8 @@ data TypeGraph
 $(makeLenses ''TypeGraph)
 
 instance (Monad m, MonadReaders [StackElement] m) => MonadReaders [StackElement] (MTL.ReaderT TypeGraph m) where
-    ask = lift ask
-    local f action = MTL.ask >>= MTL.runReaderT (local f (lift action))
+    askPoly = lift askPoly
+    localPoly f action = MTL.ask >>= MTL.runReaderT (localPoly f (lift action))
 
 instance Ppr TypeGraph where
     ppr tg = vcat [ptext "TypeGraph: ", ppr (view edges tg)]
@@ -115,14 +115,14 @@ instance Ppr TypeGraph where
 allPathStarts :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m) => m (Set TGV)
 allPathStarts = do
   -- (g, vf, kf) <- graphFromMap <$> view edges
-  (g, vf, kf) <- ask >>= return . view graph
-  kernel <- ask >>= return . view typeInfo >>= \ti -> MTL.runReaderT (Traversable.mapM expandType (view startTypes ti) >>= Traversable.mapM typeVertex') ti
+  (g, vf, kf) <- askPoly >>= return . view graph
+  kernel <- askPoly >>= return . view typeInfo >>= \ti -> MTL.runReaderT (Traversable.mapM expandType (view startTypes ti) >>= Traversable.mapM typeVertex') ti
   let keep = Set.fromList $ concatMap (reachable g) (mapMaybe kf kernel)
       keep' = Set.map (view _2) . Set.map vf $ keep
   return keep'
 
 view' :: MonadReaders s m => Getting b s b -> m b
-view' lns = view lns <$> ask
+view' lns = view lns <$> askPoly
 
 -- | Lenses represent steps in a path, but the start point is a type
 -- vertex and the endpoint is a field vertex.
@@ -174,7 +174,7 @@ isReachable gkey key0 (g, _vf, kf) = path g (fromJust $ kf key0) (fromJust $ kf 
 typeGraphVertex :: (MonadReaders TypeGraph m, MonadStates ExpandMap m, DsMonad m) => Type -> m TGV
 typeGraphVertex typ = do
         typ' <- expandType typ
-        ask >>= MTL.runReaderT (typeVertex' typ') . view typeInfo
+        askPoly >>= MTL.runReaderT (typeVertex' typ') . view typeInfo
         -- magnify typeInfo $ vertex Nothing typ'
 
 -- | Return the TGV associated with a particular type and field.
@@ -182,7 +182,7 @@ typeGraphVertexOfField :: (MonadReaders TypeGraph m, MonadStates ExpandMap m, Ds
                           (Name, Name, Either Int Name) -> Type -> m TGV
 typeGraphVertexOfField fld typ = do
         typ' <- expandType typ
-        ask >>= MTL.runReaderT (fieldVertex fld typ') . view typeInfo
+        askPoly >>= MTL.runReaderT (fieldVertex fld typ') . view typeInfo
         -- magnify typeInfo $ vertex (Just fld) typ'
 
 -- type TypeGraphEdges typ = Map typ (Set typ)

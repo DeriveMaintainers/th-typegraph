@@ -29,7 +29,7 @@ module Language.Haskell.TH.TypeGraph.Expand
     , expandClassP
     ) where
 
-import Control.Monad.States (MonadStates(get), modify')
+import Control.Monad.States (MonadStates(getPoly), modifyPoly)
 import Data.Map as Map (Map, lookup, insert)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
@@ -53,11 +53,11 @@ type ExpandMap = Map Type (E Type)
 -- | Apply the th-desugar expand function to a 'Type' and mark it as expanded.
 expandType :: (DsMonad m, MonadStates ExpandMap m)  => Type -> m (E Type)
 expandType typ = do
-  get >>= maybe expandType' return . Map.lookup typ
+  getPoly >>= maybe expandType' return . Map.lookup typ
     where
       expandType' =
           do e <- E <$> DS.typeToTH <$> (DS.dsType typ >>= DS.expand)
-             modify' (Map.insert typ e)
+             modifyPoly (Map.insert typ e)
              return e
 
 -- | Apply the th-desugar expand function to a 'Pred' and mark it as expanded.
