@@ -117,13 +117,6 @@ typeGraphEdges = do
                 g :: (Maybe (Set TGV) -> Maybe (Set TGV))
                 g = Just . maybe (singleton v2) (Set.insert v2)
 
-instance (Ppr key, Show key) => Ppr (GraphEdges key) where
-    ppr x =
-        ptext $ intercalate "\n  " $
-          "edges:" : (List.map
-                       (\(k, ks) -> intercalate "\n    " ((pprint' k ++ " ->" ++ if null ks then " []" else "") : List.map pprint' (Set.toList ks)))
-                       (sortBy (compare `on` show) (Map.toList x)))
-
 -- | Isolate and remove matching nodes
 cut :: (Eq a, Ord a) => (a -> Bool) -> GraphEdges a -> GraphEdges a
 cut p edges = Map.filterWithKey (\v _ -> not (p v)) (isolate p edges)

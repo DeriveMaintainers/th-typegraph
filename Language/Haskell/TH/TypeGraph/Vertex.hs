@@ -9,11 +9,12 @@ module Language.Haskell.TH.TypeGraph.Vertex
 
 import Control.Lens
 import Data.List as List (concatMap, intersperse)
+import Data.Map as Map (Map, toList)
 import Data.Set as Set (insert, minView, Set, toList)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.Instances ()
-import Language.Haskell.TH.PprLib (hcat, ptext)
+import Language.Haskell.TH.PprLib (hang, hcat, ptext, text, vcat)
 import Language.Haskell.TH.Syntax (Lift(lift))
 import Language.Haskell.TH.TypeGraph.Expand (E(E, unE))
 import Language.Haskell.TH.TypeGraph.Prelude (unReify, unReifyName)
@@ -58,6 +59,18 @@ instance Ppr TGV where
                           (List.concatMap (\ n -> [ptext ("aka " ++ show (unReifyName n))]) (Set.toList ns) ++
                            maybe [] (\ f -> [ppr f]) fld) ++
                         [ptext ")"])
+
+instance Ppr ((), TGV, [TGV]) where
+    ppr ((), v, vs) = vcat [hcat [ppr v, text ":"], hang (text "  ") 2 (vcat (map ppr vs))]
+
+instance Ppr ((), TGVSimple, [TGVSimple]) where
+    ppr ((), v, vs) = vcat [hcat [ppr v, text ":"], hang (text "  ") 2 (vcat (map ppr vs))]
+
+instance Ppr (Map TGV (Set TGV)) where
+    ppr mp = ppr (map (\(v, vs) -> ((), v, Set.toList vs)) (Map.toList mp))
+
+instance Ppr (Map TGVSimple (Set TGVSimple)) where
+    ppr mp = ppr (map (\(v, vs) -> ((), v, Set.toList vs)) (Map.toList mp))
 
 instance Lift TGV where
     lift (TGV {_field = f, _vsimple = s}) = [|TGV {_field = $(lift f), _vsimple = $(lift s)}|]

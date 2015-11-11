@@ -67,9 +67,6 @@ import Language.Haskell.TH.TypeGraph.Stack (StackElement)
 import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, vsimple, TypeGraphVertex, etype)
 import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or)
 
-instance Ppr Vertex where
-    ppr n = ptext ("V" ++ show n)
-
 -- | Build a TypeGraph given a set of edges and the TypeInfo environment
 makeTypeGraph :: MonadReaders TypeInfo m => (GraphEdges TGV) -> m TypeGraph
 makeTypeGraph es = do
@@ -109,8 +106,14 @@ instance (Monad m, MonadReaders [StackElement] m) => MonadReaders [StackElement]
     askPoly = lift askPoly
     localPoly f action = MTL.ask >>= MTL.runReaderT (localPoly f (lift action))
 
-instance Ppr TypeGraph where
-    ppr tg = vcat [ptext "TypeGraph: ", ppr (view edges tg)]
+instance Ppr Vertex where
+    ppr n = ptext ("V" ++ show n)
+
+instance Ppr (Graph, Vertex -> ((), TGV, [TGV]), TGV -> Maybe Vertex) where
+    ppr (g, vf, _) = vcat (List.map (ppr . vf) (vertices g))
+
+instance Ppr (Graph, Vertex -> ((), TGVSimple, [TGVSimple]), TGVSimple -> Maybe Vertex) where
+    ppr (g, vf, _) = vcat (List.map (ppr . vf) (vertices g))
 
 allPathStarts :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m) => m (Set TGV)
 allPathStarts = do
