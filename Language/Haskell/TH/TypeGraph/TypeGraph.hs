@@ -67,6 +67,15 @@ import Language.Haskell.TH.TypeGraph.Stack (StackElement)
 import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, vsimple, TypeGraphVertex, etype)
 import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or)
 
+data TypeGraph
+    = TypeGraph
+      { _typeInfo :: TypeInfo
+      , _edges :: GraphEdges TGV
+      , _graph :: (Graph, Vertex -> ((), TGV, [TGV]), TGV -> Maybe Vertex)
+      , _gsimple :: (Graph, Vertex -> ((), TGVSimple, [TGVSimple]), TGVSimple -> Maybe Vertex)
+      , _stack :: [StackElement]
+      }
+
 -- | Build a TypeGraph given a set of edges and the TypeInfo environment
 makeTypeGraph :: MonadReaders TypeInfo m => (GraphEdges TGV) -> m TypeGraph
 makeTypeGraph es = do
@@ -90,15 +99,6 @@ graphFromMap mp =
     where
       triples :: [((), key, [key])]
       triples = List.map (\ (k, ks) -> ((), k, Foldable.toList ks)) $ Map.toList mp
-
-data TypeGraph
-    = TypeGraph
-      { _typeInfo :: TypeInfo
-      , _edges :: GraphEdges TGV
-      , _graph :: (Graph, Vertex -> ((), TGV, [TGV]), TGV -> Maybe Vertex)
-      , _gsimple :: (Graph, Vertex -> ((), TGVSimple, [TGVSimple]), TGVSimple -> Maybe Vertex)
-      , _stack :: [StackElement]
-      }
 
 $(makeLenses ''TypeGraph)
 
