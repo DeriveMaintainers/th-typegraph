@@ -34,9 +34,9 @@ module Language.Haskell.TH.TypeGraph.Stack
 import Control.Applicative
 import Control.Category ((.))
 import Control.Lens as Lens -- (iso, Lens', lens, set, view, (%=), (.~))
-import Control.Monad.Reader (ReaderT, runReaderT)
+import Control.Monad.Reader (ask, ReaderT, runReaderT)
 import Control.Monad.Readers (MonadReaders(askPoly, localPoly))
---import Control.Monad.States (over')
+import Control.Monad.Trans (lift)
 import Data.Char (toUpper)
 import Data.Generics (Data, Typeable)
 import Data.Maybe (fromMaybe)
@@ -47,6 +47,7 @@ import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax hiding (lift)
 import Language.Haskell.TH.TypeGraph.Prelude (constructorName)
 import Language.Haskell.TH.TypeGraph.Shape (FieldType(..), fName, fType, constructorFieldTypes)
+import Language.Haskell.TH.TypeGraph.TypeInfo (TypeInfo)
 import Prelude hiding ((.))
 
 -- | The information required to extact a field value from a value.
@@ -68,6 +69,10 @@ type HasStack = MonadReaders TypeStack
 
 withStack :: (Monad m, MonadReaders TypeStack m) => (TypeStack -> m a) -> m a
 withStack f = askPoly >>= f
+
+instance MonadReaders TypeInfo m => MonadReaders TypeInfo (ReaderT TypeStack m) where
+    askPoly = lift askPoly
+    localPoly f action = ask >>= runReaderT (localPoly f (lift action))
 
 -- | push an element onto the TypeStack in m
 push :: MonadReaders TypeStack m => FieldType -> Con -> Dec -> m a -> m a

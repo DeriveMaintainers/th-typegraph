@@ -19,7 +19,7 @@ module Language.Haskell.TH.TypeGraph.Lens
 
 import Control.Category ((.))
 import Control.Lens as Lens (makeLensesFor, view)
-import Control.Monad.Readers (MonadReaders, viewPoly)
+import Control.Monad.Readers (MonadReaders)
 import Control.Monad.States (MonadStates)
 import Control.Monad.Writer (execWriterT, tell)
 import Data.Map as Map (keys)
@@ -28,11 +28,11 @@ import Language.Haskell.TH
 import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax hiding (lift)
-import Language.Haskell.TH.TypeGraph.Edges (simpleEdges)
+import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap)
 import Language.Haskell.TH.TypeGraph.Stack (lensNamer)
-import Language.Haskell.TH.TypeGraph.TypeGraph (edges, TypeGraph)
-import Language.Haskell.TH.TypeGraph.Vertex (etype)
+import Language.Haskell.TH.TypeGraph.TypeGraph (TypeGraph)
+import Language.Haskell.TH.TypeGraph.Vertex (etype, TGV)
 import Prelude hiding ((.))
 
 -- | Generate lenses to access the fields of the row types.  Like
@@ -41,10 +41,10 @@ import Prelude hiding ((.))
 -- the prefix "lens" and capitalizes the first letter of the field.
 -- The only reason for this function is backwards compatibility,
 -- makeLensesFor should be used instead.
-makeTypeGraphLenses :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m) =>
-                       m [Dec]
-makeTypeGraphLenses =
-    execWriterT $ viewPoly edges >>= mapM doType . map (view etype) . Map.keys . simpleEdges
+makeTypeGraphLenses :: forall m. (DsMonad m, MonadStates ExpandMap m) =>
+                       GraphEdges TGV -> m [Dec]
+makeTypeGraphLenses es =
+    (execWriterT . mapM doType . map (view etype) . Map.keys . simpleEdges) es
     where
       doType (E (ConT tname)) = qReify tname >>= doInfo
       doType _ = return ()

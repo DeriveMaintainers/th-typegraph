@@ -12,7 +12,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Language.Haskell.TH.TypeGraph.TypeGraph
-    ( TypeGraph, edges, graph, gsimple, stack
+    ( TypeGraph, graph, gsimple, stack
     , makeTypeGraph
     , graphFromMap
 
@@ -69,8 +69,7 @@ import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or
 
 data TypeGraph
     = TypeGraph
-      { _edges :: GraphEdges TGV
-      , _graph :: (Graph, Vertex -> ((), TGV, [TGV]), TGV -> Maybe Vertex)
+      { _graph :: (Graph, Vertex -> ((), TGV, [TGV]), TGV -> Maybe Vertex)
       , _gsimple :: (Graph, Vertex -> ((), TGVSimple, [TGVSimple]), TGVSimple -> Maybe Vertex)
       , _stack :: [StackElement]
       }
@@ -79,8 +78,7 @@ data TypeGraph
 makeTypeGraph :: MonadReaders TypeInfo m => (GraphEdges TGV) -> m TypeGraph
 makeTypeGraph es = do
   return $ TypeGraph
-             { _edges = es
-             , _graph = graphFromMap es
+             { _graph = graphFromMap es
              , _gsimple = graphFromMap (simpleEdges es)
              , _stack = []
              }
