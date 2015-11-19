@@ -19,6 +19,7 @@ module Language.Haskell.TH.TypeGraph.TypeGraph
     -- * TypeGraph queries
     , allLensKeys
     , allPathKeys
+    , allPathNodes
     , allPathStarts
     , reachableFrom
     , reachableFromSimple
@@ -114,31 +115,40 @@ instance Ppr (Graph, Vertex -> ((), TGV, [TGV]), TGV -> Maybe Vertex) where
 instance Ppr (Graph, Vertex -> ((), TGVSimple, [TGVSimple]), TGVSimple -> Maybe Vertex) where
     ppr (g, vf, _) = vcat (List.map (ppr . vf) (vertices g))
 
-allPathStarts :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Set TGV)
-allPathStarts = do
-  -- (g, vf, kf) <- graphFromMap <$> view edges
+allPathNodes :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Set TGV)
+allPathNodes = do
   (g, vf, kf) <- askPoly >>= return . view graph
   kernel <- askPoly >>= \ti -> MTL.runReaderT (Traversable.mapM expandType (view startTypes ti) >>= Traversable.mapM typeVertex') ti
   let keep = Set.fromList $ concatMap (reachable g) (mapMaybe kf kernel)
       keep' = Set.map (view _2) . Set.map vf $ keep
   return keep'
 
+allPathStarts :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Set TGVSimple)
+allPathStarts = allPathNodes >>= Set.map (view vsimple)
+
 view' :: MonadReaders s m => Getting b s b -> m b
 view' lns = view lns <$> askPoly
 
--- | Lenses represent steps in a path, but the start point is a type
--- vertex and the endpoint is a field vertex.
+-- | Each lens represents a single step in a path.  The start point is
+-- a simple type vertex and the endpoint is a field vertex.
 allLensKeys ::  (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Map TGVSimple (Set TGV))
 allLensKeys = do
-  g <- view' graph
-  -- gs <- view' gsimple
-  allPathStarts >>= return . Map.fromListWith Set.union . List.map (\x -> (view vsimple x, Set.fromList (adjacent' g x))) . Set.toList
+  gs <- view' gsimple
+  starts <- allPathStarts >>= Set.toList
+  (return . Map.fromListWith Set.union . List.map (\x -> (x, dests gs x))) starts
+    where
+      dests gs = Set.fromList . adjacent' gs
 
 -- | Paths go between simple types.
 allPathKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Map TGVSimple (Set TGVSimple))
 allPathKeys = do
   gs <- view' gsimple
-  allPathStarts >>= return . Map.fromList . List.map (\x -> (x, Set.fromList (reachable' gs x))) . Set.toList . Set.map (view vsimple)
+  starts <- Set.toList <$> allPathStarts
+  (return . Map.fromList . List.map (\x -> (x, dests gs x))) starts
+   where
+     dests gs = Set.fromList . reachable' gs
+
+  -- allPathStarts >>= return . Map.fromList . List.map (\x -> (x, Set.fromList (reachable' gs x))) . Set.toList . Set.map (view vsimple)
 
 reachableFrom :: forall m. (DsMonad m, MonadReaders TypeGraph m) => TGV -> m (Set TGV)
 reachableFrom v = do
