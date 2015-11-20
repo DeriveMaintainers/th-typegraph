@@ -124,7 +124,7 @@ allPathNodes = do
   return keep'
 
 allPathStarts :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Set TGVSimple)
-allPathStarts = allPathNodes >>= Set.map (view vsimple)
+allPathStarts = Set.map (view vsimple) <$> allPathNodes
 
 view' :: MonadReaders s m => Getting b s b -> m b
 view' lns = view lns <$> askPoly
@@ -133,11 +133,11 @@ view' lns = view lns <$> askPoly
 -- a simple type vertex and the endpoint is a field vertex.
 allLensKeys ::  (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Map TGVSimple (Set TGV))
 allLensKeys = do
-  gs <- view' gsimple
-  starts <- allPathStarts >>= Set.toList
-  (return . Map.fromListWith Set.union . List.map (\x -> (x, dests gs x))) starts
+  g <- view' graph
+  starts <- Set.toList <$> allPathNodes
+  (return . Map.fromListWith Set.union . List.map (\x -> (view vsimple x, dests g x))) starts
     where
-      dests gs = Set.fromList . adjacent' gs
+      dests g = Set.fromList . adjacent' g
 
 -- | Paths go between simple types.
 allPathKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Map TGVSimple (Set TGVSimple))

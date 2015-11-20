@@ -9,8 +9,7 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Lens
 import Control.Monad.Reader (runReaderT)
-import Control.Monad.State (evalStateT, StateT)
-import Control.Monad.States (MonadStates(..))
+import Control.Monad.State (evalStateT)
 import Data.List as List (map)
 import Data.Map as Map (Map, empty, fromList, keys)
 import Data.Set as Set (fromList, singleton)

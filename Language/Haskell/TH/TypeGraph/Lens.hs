@@ -28,12 +28,11 @@ import Language.Haskell.TH
 import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Syntax hiding (lift)
-import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap)
 import Language.Haskell.TH.TypeGraph.Stack (lensNamer)
 import Language.Haskell.TH.TypeGraph.TypeGraph (allLensKeys, TypeGraph)
 import Language.Haskell.TH.TypeGraph.TypeInfo (TypeInfo)
-import Language.Haskell.TH.TypeGraph.Vertex (etype, TGV)
+import Language.Haskell.TH.TypeGraph.Vertex (etype)
 import Prelude hiding ((.))
 
 -- | Generate lenses to access the fields of the row types.  Like
