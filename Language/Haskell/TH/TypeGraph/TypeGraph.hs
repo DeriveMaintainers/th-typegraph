@@ -17,10 +17,10 @@ module Language.Haskell.TH.TypeGraph.TypeGraph
     , graphFromMap
 
     -- * TypeGraph queries
-    , allLensKeys
-    , allPathKeys
     , allPathNodes
     , allPathStarts
+    , lensKeys, allLensKeys
+    , pathKeys, allPathKeys
     , reachableFrom
     , reachableFromSimple
     , goalReachableFull
@@ -40,17 +40,17 @@ import Data.Monoid (mempty)
 import Control.Applicative
 #endif
 import Control.Lens
--- import Control.Monad (when)
+import Control.Monad (foldM)
 import qualified Control.Monad.Reader as MTL (ask, ReaderT, runReaderT)
 import Control.Monad.Readers (MonadReaders(askPoly, localPoly))
 import Control.Monad.States (MonadStates)
 import Control.Monad.Trans (lift)
 import Data.Default (Default(def))
-import Data.Foldable as Foldable
+import Data.Foldable as Fold
 import Data.Graph hiding (edges)
 import Data.List as List (map)
-import Data.Map as Map (fromList, fromListWith, Map)
-import qualified Data.Map as Map (toList)
+import Data.Map.Strict as Map (insertWith, Map)
+import qualified Data.Map.Strict as Map (toList)
 import Data.Maybe (fromJust, mapMaybe)
 import Data.Set.Extra as Set (empty, fromList, map, Set, singleton, toList, union, unions)
 import Data.Traversable as Traversable
@@ -65,7 +65,7 @@ import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap, expandType)
 import Language.Haskell.TH.TypeGraph.Prelude (adjacent', reachable')
 import Language.Haskell.TH.TypeGraph.TypeInfo (startTypes, TypeInfo, typeVertex', fieldVertex)
 import Language.Haskell.TH.TypeGraph.Stack (StackElement)
-import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, vsimple, TypeGraphVertex, etype)
+import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, tgv, vsimple, TypeGraphVertex, etype)
 import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or)
 
 data TypeGraph
@@ -94,7 +94,7 @@ graphFromMap mp =
     graphFromEdges triples
     where
       triples :: [((), key, [key])]
-      triples = List.map (\ (k, ks) -> ((), k, Foldable.toList ks)) $ Map.toList mp
+      triples = List.map (\ (k, ks) -> ((), k, Fold.toList ks)) $ Map.toList mp
 
 $(makeLenses ''TypeGraph)
 
@@ -115,6 +115,8 @@ instance Ppr (Graph, Vertex -> ((), TGV, [TGV]), TGV -> Maybe Vertex) where
 instance Ppr (Graph, Vertex -> ((), TGVSimple, [TGVSimple]), TGVSimple -> Maybe Vertex) where
     ppr (g, vf, _) = vcat (List.map (ppr . vf) (vertices g))
 
+-- | All the nodes in the TGV (unsimplified) graph, where each field
+-- of a record is a distinct node.
 allPathNodes :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Set TGV)
 allPathNodes = do
   (g, vf, kf) <- askPoly >>= return . view graph
@@ -123,6 +125,8 @@ allPathNodes = do
       keep' = Set.map (view _2) . Set.map vf $ keep
   return keep'
 
+-- | All the nodes in the TGVSimple graph, where each field representa
+-- a different type.
 allPathStarts :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Set TGVSimple)
 allPathStarts = Set.map (view vsimple) <$> allPathNodes
 
@@ -130,23 +134,29 @@ view' :: MonadReaders s m => Getting b s b -> m b
 view' lns = view lns <$> askPoly
 
 -- | Each lens represents a single step in a path.  The start point is
--- a simple type vertex and the endpoint is a field vertex.
-allLensKeys ::  (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Map TGVSimple (Set TGV))
+-- a simplified vertex and the endpoint is an unsimplified vertex.
+allLensKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Map TGVSimple (Set TGV))
 allLensKeys = do
+  starts <- Set.toList <$> allPathStarts
+  foldM (\mp s -> lensKeys s >>= return . Fold.foldr (Map.insertWith Set.union s . Set.singleton) mp) mempty starts
+
+-- | Return the nodes adjacent to x in the lens graph.
+lensKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => TGVSimple -> m (Set TGV)
+lensKeys x = do
   g <- view' graph
-  starts <- Set.toList <$> allPathNodes
-  (return . Map.fromListWith Set.union . List.map (\x -> (view vsimple x, dests g x))) starts
-    where
-      dests g = Set.fromList . adjacent' g
+  return $ Set.fromList $ adjacent' g (tgv x)
 
 -- | Paths go between simple types.
 allPathKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Map TGVSimple (Set TGVSimple))
 allPathKeys = do
-  gs <- view' gsimple
   starts <- Set.toList <$> allPathStarts
-  (return . Map.fromList . List.map (\x -> (x, dests gs x))) starts
-   where
-     dests gs = Set.fromList . reachable' gs
+  foldM (\mp s -> pathKeys s >>= return . Fold.foldr (Map.insertWith Set.union s . Set.singleton) mp) mempty starts
+
+-- | Return the nodes reachable from x in the path graph.
+pathKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => TGVSimple -> m (Set TGVSimple)
+pathKeys x = do
+  gs <- view' gsimple
+  return $ Set.fromList $ reachable' gs x
 
   -- allPathStarts >>= return . Map.fromList . List.map (\x -> (x, Set.fromList (reachable' gs x))) . Set.toList . Set.map (view vsimple)
 

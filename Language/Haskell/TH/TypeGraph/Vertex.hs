@@ -5,6 +5,7 @@ module Language.Haskell.TH.TypeGraph.Vertex
     ( TypeGraphVertex(..)
     , TGV(..), field, vsimple
     , TGVSimple(..), syns, etype
+    , tgv
     ) where
 
 import Control.Lens
@@ -35,6 +36,9 @@ data TGVSimple
       { _syns :: Set Name -- ^ All the type synonyms that expand to this type
       , _etype :: E Type -- ^ The fully expanded type
       } deriving (Eq, Ord, Show)
+
+tgv :: TGVSimple -> TGV
+tgv v = TGV { _field = Nothing, _vsimple = v}
 
 $(makeLenses ''TGV)
 $(makeLenses ''TGVSimple)
