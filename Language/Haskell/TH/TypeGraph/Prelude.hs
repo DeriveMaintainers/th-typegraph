@@ -7,6 +7,7 @@
 {-# LANGUAGE TupleSections #-}
 module Language.Haskell.TH.TypeGraph.Prelude
     ( pprint'
+    , OverTypes(overTypes)
     , unlifted
     , constructorName
     , declarationName
@@ -20,6 +21,7 @@ module Language.Haskell.TH.TypeGraph.Prelude
     ) where
 
 import Control.Lens hiding (cons)
+import Control.Monad (foldM)
 import Data.Generics (Data, everywhere, mkT)
 import Data.Graph as Graph
 import Data.List (intersperse)
@@ -28,7 +30,7 @@ import Data.Maybe (fromMaybe)
 import Data.Set as Set (fromList, Set, toList)
 import Language.Haskell.TH
 import Language.Haskell.TH.PprLib (ptext, hcat)
-import Language.Haskell.TH.Syntax (Lift(lift), Name(Name), NameFlavour(NameS), Quasi(qReify))
+import Language.Haskell.TH.Syntax (Lift(lift), Name(Name), NameFlavour(NameS), Quasi(qReify), StrictType, VarStrictType)
 
 instance Ppr () where
     ppr () = ptext "()"
@@ -43,34 +45,46 @@ instance Ppr a => Ppr (L [a]) where
 pprint' :: Ppr a => a -> [Char]
 pprint' typ = unwords $ words $ pprint typ
 
+-- | Perform a fold over the Type and Info values embedded in t
+class OverTypes t where
+    overTypes :: Quasi m => (a -> Either Info Type -> m a) -> a -> t -> m a
+
+instance OverTypes Dec where
+    overTypes f a (DataD _ _ _ cons _) = foldM (overTypes f) a cons
+    overTypes f a (NewtypeD _ _ _ con _) = overTypes f a con
+    overTypes f a (TySynD _ _ typ) = overTypes f a typ
+    overTypes _ a _ = return a
+
+instance OverTypes StrictType where
+    overTypes f a (_, t) = overTypes f a t
+
+instance OverTypes VarStrictType where
+    overTypes f a (_, _, t) = overTypes f a t
+
+instance OverTypes Con where
+    overTypes f a (ForallC _ _ con) = overTypes f a con
+    overTypes f a (NormalC _ ts) = foldM (overTypes f) a ts
+    overTypes f a (RecC _ ts) = foldM (overTypes f) a ts
+    overTypes f a (InfixC t1 _ t2) = overTypes f a t1 >>= flip (overTypes f) t2
+
+instance OverTypes Type where
+    overTypes f a t@(AppT t1 t2) = f a (Right t) >>= flip (overTypes f) t1 >>= flip (overTypes f) t2
+    overTypes f a (ConT name) = qReify name >>= overTypes f a
+    overTypes f a t@(ForallT _ _ typ) = f a (Right t) >>= flip (overTypes f) typ
+    overTypes f a t = f a (Right t)
+
+instance OverTypes Info where
+    overTypes f a x = f a (Left x)
+
 -- | Does the type or the declaration to which it refers contain a
 -- primitive (aka unlifted) type?  This will traverse down any 'Dec'
 -- to the named types, and then check whether any of their 'Info'
 -- records are 'PrimTyConI' values.
-class IsUnlifted t where
-    unlifted :: Quasi m => t -> m Bool
-
-instance IsUnlifted Dec where
-    unlifted (DataD _ _ _ cons _) = or <$> mapM unlifted cons
-    unlifted (NewtypeD _ _ _ con _) = unlifted con
-    unlifted (TySynD _ _ typ) = unlifted typ
-    unlifted _ = return False
-
-instance IsUnlifted Con where
-    unlifted (ForallC _ _ con) = unlifted con
-    unlifted (NormalC _ ts) = or <$> mapM (unlifted . snd) ts
-    unlifted (RecC _ ts) = or <$> mapM (\ (_, _, t) -> unlifted t) ts
-    unlifted (InfixC t1 _ t2) = or <$> mapM (unlifted . snd) [t1, t2]
-
-instance IsUnlifted Type where
-    unlifted (ForallT _ _ typ) = unlifted typ
-    unlifted (ConT name) = qReify name >>= unlifted
-    unlifted (AppT t1 t2) = (||) <$> unlifted t1 <*> unlifted t2
-    unlifted _ = return False
-
-instance IsUnlifted Info where
-    unlifted (PrimTyConI _ _ _) = return True
-    unlifted _ = return False -- traversal stops here
+unlifted :: (OverTypes t, Quasi m) => t -> m Bool
+unlifted x = overTypes f False x
+    where
+      f _ (Left (PrimTyConI _ _ _)) = return True
+      f r _ = return r
 
 constructorName :: Con -> Name
 constructorName (ForallC _ _ con) = constructorName con
