@@ -17,7 +17,7 @@ import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (hang, hcat, ptext, text, vcat)
 import Language.Haskell.TH.Syntax (Lift(lift))
-import Language.Haskell.TH.TypeGraph.Expand (E(E, unE))
+import Language.Haskell.TH.TypeGraph.Expand (E(E), unE)
 import Language.Haskell.TH.TypeGraph.Prelude (unReify, unReifyName)
 import Language.Haskell.TH.TypeGraph.Shape (Field)
 
@@ -45,7 +45,7 @@ $(makeLenses ''TGVSimple)
 
 instance Ppr TGVSimple where
     ppr (TGVSimple {_syns = ns, _etype = typ}) =
-        hcat (ppr (unReify (unE typ)) :
+        hcat (ppr (unReify (view unE typ)) :
               case (Set.toList ns) of
                  [] -> []
                  _ ->   [ptext " ("] ++
@@ -55,7 +55,7 @@ instance Ppr TGVSimple where
 
 instance Ppr TGV where
     ppr (TGV {_field = fld, _vsimple = TGVSimple {_syns = ns, _etype = typ}}) =
-        hcat (ppr (unReify (unE typ)) :
+        hcat (ppr (unReify (view unE typ)) :
               case (fld, Set.toList ns) of
                  (Nothing, []) -> []
                  _ ->   [ptext " ("] ++

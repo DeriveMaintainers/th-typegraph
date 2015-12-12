@@ -22,13 +22,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Language.Haskell.TH.TypeGraph.Expand
-    ( E(E, unE)
+    ( E(E, _unE), unE
     , ExpandMap
     , expandType
     , expandPred
     , expandClassP
     ) where
 
+import Control.Lens (makeLenses)
 import Control.Monad.States (MonadStates(getPoly), modifyPoly)
 import Data.Map as Map (Map, lookup, insert)
 import Language.Haskell.Exts.Syntax ()
@@ -39,13 +40,15 @@ import Language.Haskell.TH.Syntax -- (Lift(lift))
 import Prelude hiding (pred)
 
 -- | A concrete type used to mark type which have been expanded
-newtype E a = E {unE :: a} deriving (Eq, Ord, Show)
+newtype E a = E {_unE :: a} deriving (Eq, Ord, Show)
 
 instance Ppr a => Ppr (E a) where
     ppr (E x) = ppr x
 
 instance Lift (E Type) where
-    lift etype = [|E $(lift (unE etype))|]
+    lift etype = [|E $(lift (_unE etype))|]
+
+$(makeLenses ''E)
 
 -- | The state type used to memoize expansions.
 type ExpandMap = Map Type (E Type)
