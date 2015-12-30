@@ -41,9 +41,10 @@ instance Ppr a => Ppr (L [a]) where
     ppr (L l) = hcat ([ptext "["] ++ intersperse (ptext ", ") (map ppr l) ++ [ptext "]"])
 
 -- | Pretty print a 'Ppr' value on a single line with each block of
--- white space (newlines, tabs, etc.) converted to a single space.
-pprint' :: Ppr a => a -> [Char]
-pprint' typ = unwords $ words $ pprint typ
+-- white space (newlines, tabs, etc.) converted to a single space, and
+-- all the module qualifiers removed from the names.
+pprint' :: (Ppr a, Data a) => a -> [Char]
+pprint' typ = unwords $ words $ pprint $ friendlyNames $ typ
 
 -- | Perform a fold over the Type and Info values embedded in t
 class OverTypes t where

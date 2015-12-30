@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -9,6 +10,7 @@ module Language.Haskell.TH.TypeGraph.Vertex
     ) where
 
 import Control.Lens
+import Data.Data (Data)
 import Data.List as List (concatMap, intersperse)
 import Data.Map as Map (Map, toList)
 import Data.Set as Set (insert, minView, Set, toList)
@@ -28,14 +30,14 @@ data TGV
     = TGV
       { _field :: Maybe Field -- ^ The record field which contains this type
       , _vsimple :: TGVSimple
-      } deriving (Eq, Ord, Show)
+      } deriving (Eq, Ord, Show, Data)
 
 -- | For simple type graphs where no parent field information is required.
 data TGVSimple
     = TGVSimple
       { _syns :: Set Name -- ^ All the type synonyms that expand to this type
       , _etype :: E Type -- ^ The fully expanded type
-      } deriving (Eq, Ord, Show)
+      } deriving (Eq, Ord, Show, Data)
 
 tgv :: TGVSimple -> TGV
 tgv v = TGV { _field = Nothing, _vsimple = v}

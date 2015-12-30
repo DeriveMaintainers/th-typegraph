@@ -13,7 +13,7 @@
 -- provided in "Language.Haskell.TH.Context.Unsafe", for when less
 -- type safety is required.
 
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -31,6 +31,7 @@ module Language.Haskell.TH.TypeGraph.Expand
 
 import Control.Lens (makeLenses)
 import Control.Monad.States (MonadStates(getPoly), modifyPoly)
+import Data.Data (Data)
 import Data.Map as Map (Map, lookup, insert)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
@@ -40,7 +41,7 @@ import Language.Haskell.TH.Syntax -- (Lift(lift))
 import Prelude hiding (pred)
 
 -- | A concrete type used to mark type which have been expanded
-newtype E a = E {_unE :: a} deriving (Eq, Ord, Show)
+newtype E a = E {_unE :: a} deriving (Eq, Ord, Show, Data)
 
 instance Ppr a => Ppr (E a) where
     ppr (E x) = ppr x

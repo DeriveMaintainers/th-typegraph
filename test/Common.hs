@@ -47,13 +47,13 @@ pprintDec = pprint' . unReify
 pprintType :: E Type -> String
 pprintType = pprint' . unReify . view unE
 
-pprintVertex :: Ppr v => v -> String
+pprintVertex :: (Ppr v, Data v) => v -> String
 pprintVertex = pprint'
 
 pprintPred :: E Pred -> String
 pprintPred = pprint' . unReify . view unE
 
-edgesToStrings :: (TypeGraphVertex v, Ppr v) => GraphEdges v -> [(String, [String])]
+edgesToStrings :: (TypeGraphVertex v, Ppr v, Data v) => GraphEdges v -> [(String, [String])]
 edgesToStrings mp = List.map (\ (t, s) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
 
 typeGraphEdges' :: forall m. (DsMonad m, MonadReaders TypeInfo m, MonadStates ExpandMap m) => m (GraphEdges TGV)
