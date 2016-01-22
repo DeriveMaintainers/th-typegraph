@@ -33,7 +33,8 @@ tests :: SpecM () ()
 tests = do
 
   it "records a type synonym 1" $ do
-     $([t|String|] >>= \string -> makeTypeInfo (const $ return mempty) [string] >>= lift . view synonyms) `shouldBe` (Map.fromList [(E (AppT ListT (ConT ''Char)), Set.singleton ''String)])
+     $([t|String|] >>= \string -> makeTypeInfo (const $ return mempty) [string] >>= lift . view synonyms) `shouldBe` (Map.fromList [(E (AppT ListT (ConT ''Char)), Set.singleton ''String),
+                                                                                                                                    (E (ConT ''Char), Set.singleton ''Char)])
 
   it "records a type synonym 2" $ do
      $([t|String|] >>= \string ->

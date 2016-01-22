@@ -13,7 +13,7 @@ import Control.Lens
 import Data.Data (Data)
 import Data.List as List (concatMap, intersperse)
 import Data.Map as Map (Map, toList)
-import Data.Set as Set (insert, minView, Set, toList)
+import Data.Set as Set (delete, insert, minView, Set, toList)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.Instances ()
@@ -47,22 +47,28 @@ $(makeLenses ''TGVSimple)
 
 instance Ppr TGVSimple where
     ppr (TGVSimple {_syns = ns, _etype = typ}) =
+        let ns' = Set.toList $ case typ of
+                                 E (ConT n) -> Set.delete n ns
+                                 _ -> ns in
         hcat (ppr (unReify (view unE typ)) :
-              case (Set.toList ns) of
+              case ns' of
                  [] -> []
                  _ ->   [ptext " ("] ++
                         intersperse (ptext ", ")
-                          (List.concatMap (\ n -> [ptext ("aka " ++ show (unReifyName n))]) (Set.toList ns)) ++
+                          (List.concatMap (\ n -> [ptext ("aka " ++ show (unReifyName n))]) ns') ++
                         [ptext ")"])
 
 instance Ppr TGV where
     ppr (TGV {_field = fld, _vsimple = TGVSimple {_syns = ns, _etype = typ}}) =
+        let ns' = Set.toList $ case typ of
+                                 E (ConT n) -> Set.delete n ns
+                                 _ -> ns in
         hcat (ppr (unReify (view unE typ)) :
-              case (fld, Set.toList ns) of
+              case (fld, ns') of
                  (Nothing, []) -> []
                  _ ->   [ptext " ("] ++
                         intersperse (ptext ", ")
-                          (List.concatMap (\ n -> [ptext ("aka " ++ show (unReifyName n))]) (Set.toList ns) ++
+                          (List.concatMap (\ n -> [ptext ("aka " ++ show (unReifyName n))]) ns' ++
                            maybe [] (\ f -> [ppr f]) fld) ++
                         [ptext ")"])
 

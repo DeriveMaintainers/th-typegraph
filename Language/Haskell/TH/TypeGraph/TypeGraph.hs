@@ -65,7 +65,7 @@ import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap, expandType)
 import Language.Haskell.TH.TypeGraph.Prelude (adjacent', reachable')
 import Language.Haskell.TH.TypeGraph.TypeInfo (startTypes, TypeInfo, typeVertex', fieldVertex)
 import Language.Haskell.TH.TypeGraph.Stack (StackElement)
-import Language.Haskell.TH.TypeGraph.Vertex (TGV, TGVSimple, tgv, vsimple, TypeGraphVertex, etype)
+import Language.Haskell.TH.TypeGraph.Vertex (etype, tgv, TGV, TGVSimple, TypeGraphVertex, vsimple)
 import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or)
 
 data TypeGraph

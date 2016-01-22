@@ -124,16 +124,16 @@ collectTypeInfo extraTypes typ0 = do
       doType'' typ = error $ "makeTypeInfo: " ++ pprint' typ
 
       doInfo :: Name -> Info -> StateT TypeInfo m ()
-      doInfo _tname (TyConI dec) = doDec dec
+      doInfo tname (TyConI dec) = do
+        etyp <- expandType (ConT tname)
+        synonyms %= Map.insertWith union etyp (singleton tname)
+        doDec dec
       doInfo _tname (PrimTyConI _ _ _) = return ()
       doInfo _tname (FamilyI _ _) = return () -- Not sure what to do here
       doInfo _ info = error $ "makeTypeInfo: " ++ show info
 
       doDec :: Dec -> StateT TypeInfo m ()
-      doDec (TySynD tname _ typ) = do
-        etyp <- expandType (ConT tname)
-        synonyms %= Map.insertWith union etyp (singleton tname)
-        doType typ
+      doDec (TySynD _tname _ typ) = doType typ
       doDec (NewtypeD _ tname _ constr _) = doCon tname constr
       doDec (DataD _ tname _ constrs _) = Foldable.mapM_ (doCon tname) constrs
       doDec dec = error $ "makeTypeInfo: " ++ pprint' dec
