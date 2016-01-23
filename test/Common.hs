@@ -9,7 +9,7 @@ import Data.Default (Default)
 import Data.List as List (intercalate, map)
 import Data.Map as Map (Map, filter, fromList, fromListWith, keys, toList)
 import Data.Monoid ((<>), Monoid(mempty, mappend))
-import Data.Set as Set (Set, difference, empty, fromList, null, toList, union)
+import Data.Set as Set (Set, difference, empty, fromList, map, null, toList, union)
 import Data.Generics (Data, everywhere, mkT)
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar (DsMonad)
@@ -53,8 +53,8 @@ pprintVertex = pprint'
 pprintPred :: E Pred -> String
 pprintPred = pprint' . unReify . view unE
 
-edgesToStrings :: (TypeGraphVertex v, Ppr v, Data v) => GraphEdges v -> [(String, [String])]
-edgesToStrings mp = List.map (\ (t, s) -> (pprintVertex t, map pprintVertex (Set.toList s))) (Map.toList mp)
+edgesToStrings :: (TypeGraphVertex v, Ppr v, Data v) => GraphEdges v -> [(String, Set String)]
+edgesToStrings mp = List.map (\ (t, s) -> (pprintVertex t, Set.map pprintVertex s)) (Map.toList mp)
 
 typeGraphEdges' :: forall m. (DsMonad m, MonadReaders TypeInfo m, MonadStates ExpandMap m) => m (GraphEdges TGV)
 typeGraphEdges' = typeGraphEdges
