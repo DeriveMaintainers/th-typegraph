@@ -73,10 +73,12 @@ instance Ppr TGV where
                         [ptext ")"])
 
 instance Ppr ((), TGV, [TGV]) where
-    ppr ((), v, vs) = vcat [hcat [ppr v, text ":"], hang (text "  ") 2 (vcat (map ppr vs))]
+    ppr ((), v, []) = hcat [ppr v, text ": []"]
+    ppr ((), v, vs) = hang (hcat [ppr v, text ":"]) 2 (vcat (map ppr vs))
 
 instance Ppr ((), TGVSimple, [TGVSimple]) where
-    ppr ((), v, vs) = vcat [hcat [ppr v, text ":"], hang (text "  ") 2 (vcat (map ppr vs))]
+    ppr ((), v, []) = hcat [ppr v, text ": []"]
+    ppr ((), v, vs) = hang (hcat [ppr v, text ":"]) 2 (vcat (map ppr vs))
 
 instance Ppr (Map TGV (Set TGV)) where
     ppr mp = ppr (map (\(v, vs) -> ((), v, Set.toList vs)) (Map.toList mp))
