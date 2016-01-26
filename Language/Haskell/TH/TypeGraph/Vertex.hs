@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 module Language.Haskell.TH.TypeGraph.Vertex
-    ( TypeGraphVertex(..)
+    ( TypeGraphVertex(..), bestName
     , TGV(..), field, vsimple
     , TGVSimple(..), syns, etype
     , tgv
@@ -98,6 +98,14 @@ class TypeGraphVertex v where
     -- any) used in its data declaration.  Note that this might return the
     -- empty set.
     bestType :: v -> Type
+
+bestName :: TypeGraphVertex v => v -> Maybe Name
+bestName v =
+    case bestType v of
+      ConT tname -> Just tname
+      _ -> case minView (typeNames v) of
+             Just (tname, _) -> Just tname
+             Nothing -> Nothing
 
 instance TypeGraphVertex TGV where
     typeNames = typeNames . _vsimple

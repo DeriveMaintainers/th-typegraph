@@ -106,6 +106,9 @@ instance MonadReaders TypeInfo m => MonadReaders TypeInfo (MTL.ReaderT TypeGraph
     askPoly = lift askPoly
     localPoly f action = MTL.ask >>= MTL.runReaderT (localPoly f (lift action))
 
+instance Ppr TypeGraph where
+    ppr = ppr . view graph
+
 instance Ppr Vertex where
     ppr n = ptext ("V" ++ show n)
 
