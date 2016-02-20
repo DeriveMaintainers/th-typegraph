@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 module Language.Haskell.TH.TypeGraph.Vertex
     ( TypeGraphVertex(..), bestName
+    , MayHaveField(..)
     , TGV(..), field, vsimple
     , TGVSimple(..), syns, etype
     , tgv
@@ -98,6 +99,13 @@ class TypeGraphVertex v where
     -- any) used in its data declaration.  Note that this might return the
     -- empty set.
     bestType :: v -> Type
+
+class MayHaveField v where
+    fieldOf :: v -> Maybe Field
+
+-- Obviously, anything can return a maybe, this should go away
+instance MayHaveField TGV where
+    fieldOf = view field
 
 bestName :: TypeGraphVertex v => v -> Maybe Name
 bestName v =
