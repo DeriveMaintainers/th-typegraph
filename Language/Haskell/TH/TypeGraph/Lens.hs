@@ -18,11 +18,13 @@ module Language.Haskell.TH.TypeGraph.Lens
     ) where
 
 import Control.Category ((.))
-import Control.Lens as Lens (makeLensesFor, view)
+import Control.Lens as Lens (_2, makeLensesFor, view)
 import Control.Monad.Readers (MonadReaders)
 import Control.Monad.States (MonadStates)
 import Control.Monad.Writer (execWriterT, tell)
-import Data.Map as Map (keys)
+import Data.Graph (Vertex)
+import Data.Map as Map (keys, Map)
+import Data.Set (Set)
 import Language.Haskell.Exts.Syntax ()
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar (DsMonad)
@@ -32,7 +34,7 @@ import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap)
 import Language.Haskell.TH.TypeGraph.Stack (lensNamer)
 import Language.Haskell.TH.TypeGraph.TypeGraph (allLensKeys, TypeGraph)
 import Language.Haskell.TH.TypeGraph.TypeInfo (TypeInfo)
-import Language.Haskell.TH.TypeGraph.Vertex (etype)
+import Language.Haskell.TH.TypeGraph.Vertex (etype, TGVSimple, TGV)
 import Prelude hiding ((.))
 
 -- | Generate lenses to access the fields of the row types.  Like
@@ -43,7 +45,7 @@ import Prelude hiding ((.))
 -- makeLensesFor should be used instead.
 makeTypeGraphLenses :: forall m. (DsMonad m, MonadReaders TypeInfo m, MonadReaders TypeGraph m, MonadStates ExpandMap m) => m [Dec]
 makeTypeGraphLenses =
-    allLensKeys >>= execWriterT . mapM doType . map (view etype) . Map.keys
+    (allLensKeys :: m (Map (Vertex, TGVSimple) (Set (Vertex, TGV)))) >>= execWriterT . mapM doType . map (view (_2 . etype)) . Map.keys
     where
       doType (E (ConT tname)) = qReify tname >>= doInfo
       doType _ = return ()
