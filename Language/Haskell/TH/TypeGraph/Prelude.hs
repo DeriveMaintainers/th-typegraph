@@ -26,7 +26,7 @@ import Data.Generics (Data, everywhere, mkT)
 import Data.Graph as Graph
 import Data.List (intersperse)
 import Data.Map as Map (Map, fromList, toList)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromJust, fromMaybe)
 import Data.Set as Set (fromList, Set, toList)
 import Language.Haskell.TH
 import Language.Haskell.TH.PprLib (ptext, hcat)
@@ -130,17 +130,19 @@ unReifyName :: Name -> Name
 unReifyName = mkName . nameBase
 
 -- | Return a key's list of adjacent keys
-adjacent' :: forall node key. (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex) -> key -> [key]
+adjacent' :: forall node key. (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex) -> key -> [(Vertex, key)]
 adjacent' (_, vf, kf) k =
-    view _3 $ vf v
+    map (\k' -> (fromJust (kf k'), k')) ks
     where
+      ks = view _3 $ vf v
       v = fromMaybe (error "Language.Haskell.TH.TypeGraph.Prelude.adjacent") (kf k)
 
 -- | Return a key's list of reachable keys
-reachable' :: forall node key. (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex) -> key -> [key]
+reachable' :: forall node key. (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex) -> key -> [(Vertex, key)]
 reachable' (g, vf, kf) k =
-    map (view _2 . vf) $ reachableVerts
+    map (\k' -> (fromJust (kf k'), k')) ks
     where
+      ks = map (view _2 . vf) $ reachableVerts
       reachableVerts = Graph.reachable g v
       v = fromMaybe (error "Language.Haskell.TH.TypeGraph.Prelude.reachable") (kf k)
 

@@ -5,13 +5,14 @@
 module Language.Haskell.TH.TypeGraph.Vertex
     ( TypeGraphVertex(..), bestName
     , MayHaveField(..)
-    , TGV(..), field, vsimple
-    , TGVSimple(..), syns, etype
-    , tgv
+    , TGV(..), field, vsimple, TGV'
+    , TGVSimple(..), syns, etype, TGVSimple'
+    , mkTGV
     ) where
 
 import Control.Lens
 import Data.Data (Data)
+import Data.Graph (Vertex)
 import Data.List as List (concatMap, intersperse)
 import Data.Map as Map (Map, toList)
 import Data.Set as Set (delete, insert, minView, Set, toList)
@@ -40,8 +41,11 @@ data TGVSimple
       , _etype :: E Type -- ^ The fully expanded type
       } deriving (Eq, Ord, Show, Data)
 
-tgv :: TGVSimple -> TGV
-tgv v = TGV { _field = Nothing, _vsimple = v}
+type TGVSimple' = (Vertex, TGVSimple)
+type TGV' = (Vertex, TGV)
+
+mkTGV :: TGVSimple -> TGV
+mkTGV v = TGV { _field = Nothing, _vsimple = v}
 
 $(makeLenses ''TGV)
 $(makeLenses ''TGVSimple)
@@ -106,6 +110,8 @@ class MayHaveField v where
 -- Obviously, anything can return a maybe, this should go away
 instance MayHaveField TGV where
     fieldOf = view field
+instance MayHaveField TGV' where
+    fieldOf = fieldOf . snd
 
 bestName :: TypeGraphVertex v => v -> Maybe Name
 bestName v =
@@ -124,3 +130,11 @@ instance TypeGraphVertex TGVSimple where
     typeNames (TGVSimple {_syns = s}) = s
     bestType (TGVSimple {_etype = E (ConT name)}) = ConT name
     bestType v = maybe (let (E x) = view etype v in x) (ConT . fst) (Set.minView (view syns v))
+
+instance TypeGraphVertex TGV' where
+    typeNames = typeNames . snd
+    bestType = bestType . snd
+
+instance TypeGraphVertex TGVSimple' where
+    typeNames = typeNames . snd
+    bestType = bestType . snd

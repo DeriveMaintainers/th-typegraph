@@ -20,6 +20,7 @@ module Language.Haskell.TH.TypeGraph.TypeGraph
     , allPathNodes
     , allPathStarts
     , lensKeys, allLensKeys
+    , tgvNew', tgvNew, tgvSimple
     , pathKeys, allPathKeys
     , reachableFrom
     , reachableFromSimple
@@ -63,9 +64,10 @@ import Language.Haskell.TH.Syntax (Quasi(..))
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap, expandType)
 import Language.Haskell.TH.TypeGraph.Prelude (adjacent', reachable')
-import Language.Haskell.TH.TypeGraph.TypeInfo (startTypes, TypeInfo, typeVertex', fieldVertex)
+import Language.Haskell.TH.TypeGraph.TypeInfo (startTypes, TypeInfo, typeVertex, typeVertex', fieldVertex)
+import Language.Haskell.TH.TypeGraph.Shape (Field)
 import Language.Haskell.TH.TypeGraph.Stack (StackElement)
-import Language.Haskell.TH.TypeGraph.Vertex (etype, tgv, TGV, TGVSimple, TypeGraphVertex, vsimple)
+import Language.Haskell.TH.TypeGraph.Vertex (etype, mkTGV, TGV(..), TGV', TGVSimple(..), TGVSimple', TypeGraphVertex, vsimple)
 import Prelude hiding (any, concat, concatMap, elem, exp, foldr, mapM_, null, or)
 
 data TypeGraph
@@ -138,25 +140,49 @@ view' lns = view lns <$> askPoly
 
 -- | Each lens represents a single step in a path.  The start point is
 -- a simplified vertex and the endpoint is an unsimplified vertex.
-allLensKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Map TGVSimple (Set TGV))
+allLensKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Map TGVSimple (Set TGV'))
 allLensKeys = do
   starts <- Set.toList <$> allPathStarts
   foldM (\mp s -> lensKeys s >>= return . Fold.foldr (Map.insertWith Set.union s . Set.singleton) mp) mempty starts
 
+-- | Find the node corresponding to the given simple graph node in the
+-- full graph.
+-- tgvNew' :: (MonadReaders TypeGraph m, MonadReaders TypeInfo m) => Maybe Field -> TGVSimple -> m TGV'
+tgvNew' :: MonadReaders TypeGraph m => Maybe Field -> TGVSimple -> m (Vertex, TGV)
+tgvNew' mf s =
+    do let t = TGV { _field = mf, _vsimple = s}
+       (_g, vf, kf) <- askPoly >>= return . view graph
+       let Just v = kf t
+           (_, t', _) = vf v
+       return (v, t')
+
+tgvNew :: MonadReaders TypeGraph m => Maybe Field -> TGVSimple -> m TGV
+tgvNew mf s =
+    do (_, t) <- tgvNew' mf s
+       return t
+
+-- | Find the simple graph node corresponding to the given type
+tgvSimple :: (MonadStates ExpandMap m, DsMonad m, MonadReaders TypeInfo m, MonadReaders TypeGraph m) => Type -> m (Vertex, TGVSimple)
+tgvSimple t =
+    do (_g, _vf, kf) <- askPoly >>= return . view gsimple
+       s <- expandType t >>= typeVertex
+       let k = maybe (error ("tgvSimple: " ++ show t)) id (kf s)
+       return (k, s)
+
 -- | Return the nodes adjacent to x in the lens graph.
-lensKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => TGVSimple -> m (Set TGV)
+lensKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => TGVSimple -> m (Set TGV')
 lensKeys x = do
   g <- view' graph
-  return $ Set.fromList $ adjacent' g (tgv x)
+  return $ Set.fromList $ adjacent' g (mkTGV x)
 
 -- | Paths go between simple types.
-allPathKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Map TGVSimple (Set TGVSimple))
+allPathKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => m (Map TGVSimple (Set TGVSimple'))
 allPathKeys = do
   starts <- Set.toList <$> allPathStarts
   foldM (\mp s -> pathKeys s >>= return . Fold.foldr (Map.insertWith Set.union s . Set.singleton) mp) mempty starts
 
 -- | Return the nodes reachable from x in the path graph.
-pathKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => TGVSimple -> m (Set TGVSimple)
+pathKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => TGVSimple -> m (Set TGVSimple')
 pathKeys x = do
   gs <- view' gsimple
   return $ Set.fromList $ reachable' gs x
