@@ -25,7 +25,7 @@ module Language.Haskell.TH.TypeGraph.TypeGraph
     , allPathNodes
     , allPathStarts
     , lensKeys, allLensKeys
-    , tgv, tgvSimple
+    , tgv, tgvSimple, tgvSimple'
     , pathKeys, allPathKeys
     , reachableFrom
     , reachableFromSimple
@@ -190,6 +190,12 @@ tgvSimple t =
        s <- expandType t >>= typeVertex
        let k = maybe (error ("tgvSimple: " ++ show t)) id (kf s)
        return $ toMaybePair (k, s)
+
+tgvSimple' :: (MonadStates ExpandMap m, DsMonad m, MonadReaders TypeInfo m, MonadReaders TypeGraph m, MaybePair t TGVSimple) => Type -> m (Maybe t)
+tgvSimple' t =
+    do (_g, _vf, kf) <- askPoly >>= return . view gsimple
+       s <- expandType t >>= typeVertex
+       return $ fmap (\k -> toMaybePair (k, s)) (kf s)
 
 -- | Return the nodes adjacent to x in the lens graph.
 lensKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m, MaybePair t TGV, Ord t, HasTGVSimple s) =>
