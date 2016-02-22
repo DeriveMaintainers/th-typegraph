@@ -77,6 +77,12 @@ instance Ppr TGV where
                            maybe [] (\ f -> [ppr f]) fld) ++
                         [ptext ")"])
 
+instance Ppr TGVSimple' where
+    ppr = ppr . snd
+
+instance Ppr TGV' where
+    ppr = ppr . snd
+
 instance Ppr ((), TGV, [TGV]) where
     ppr ((), v, []) = hcat [ppr v, text ": []"]
     ppr ((), v, vs) = hang (hcat [ppr v, text ":"]) 2 (vcat (map ppr vs))
