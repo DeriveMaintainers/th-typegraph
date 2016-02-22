@@ -130,16 +130,16 @@ unReifyName :: Name -> Name
 unReifyName = mkName . nameBase
 
 -- | Return a key's list of adjacent keys
-adjacent' :: forall node key. (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex) -> key -> [(Vertex, key)]
-adjacent' (_, vf, kf) k =
+adjacent' :: forall node key. (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex) -> (Vertex, key) -> [(Vertex, key)]
+adjacent' (_, vf, kf) (_, k) =
     map (\k' -> (fromJust (kf k'), k')) ks
     where
       ks = view _3 $ vf v
       v = fromMaybe (error "Language.Haskell.TH.TypeGraph.Prelude.adjacent") (kf k)
 
 -- | Return a key's list of reachable keys
-reachable' :: forall node key. (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex) -> key -> [(Vertex, key)]
-reachable' (g, vf, kf) k =
+reachable' :: forall node key. (Graph, Vertex -> (node, key, [key]), key -> Maybe Vertex) -> (Vertex, key) -> [(Vertex, key)]
+reachable' (g, vf, kf) (_, k) =
     map (\k' -> (fromJust (kf k'), k')) ks
     where
       ks = map (view _2 . vf) $ reachableVerts
