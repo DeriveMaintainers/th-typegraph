@@ -3,11 +3,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 module Language.Haskell.TH.TypeGraph.Vertex
-    ( TypeGraphVertex(..), bestName
-    , MayHaveField(..)
+    ( TypeGraphVertex(..)
     , TGV(..), field, vsimple, TGV'
     , TGVSimple(..), syns, etype, TGVSimple'
-    , mkTGV
     ) where
 
 import Control.Lens
@@ -43,9 +41,6 @@ data TGVSimple
 
 type TGVSimple' = (Vertex, TGVSimple)
 type TGV' = (Vertex, TGV)
-
-mkTGV :: TGVSimple -> TGV
-mkTGV v = TGV { _field = Nothing, _vsimple = v}
 
 $(makeLenses ''TGV)
 $(makeLenses ''TGVSimple)
@@ -109,23 +104,6 @@ class TypeGraphVertex v where
     -- any) used in its data declaration.  Note that this might return the
     -- empty set.
     bestType :: v -> Type
-
-class MayHaveField v where
-    fieldOf :: v -> Maybe Field
-
--- Obviously, anything can return a maybe, this should go away
-instance MayHaveField TGV where
-    fieldOf = view field
-instance MayHaveField TGV' where
-    fieldOf = fieldOf . snd
-
-bestName :: TypeGraphVertex v => v -> Maybe Name
-bestName v =
-    case bestType v of
-      ConT tname -> Just tname
-      _ -> case minView (typeNames v) of
-             Just (tname, _) -> Just tname
-             Nothing -> Nothing
 
 instance TypeGraphVertex TGV where
     typeNames = typeNames . _vsimple
