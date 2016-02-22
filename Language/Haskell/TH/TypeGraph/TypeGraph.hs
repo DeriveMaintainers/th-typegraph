@@ -174,13 +174,13 @@ allLensKeys = do
 
 -- | Find the node corresponding to the given simple graph node in the
 -- full graph.
-tgv :: (MonadReaders TypeGraph m, HasTGVSimple s) => Maybe Field -> s -> m TGV'
+tgv :: MonadReaders TypeGraph m => Maybe Field -> TGVSimple' -> m TGV'
 tgv mf s =
     do let t = TGV { _field = mf, _vsimple = asTGVSimple s}
        (_g, vf, kf) <- askPoly >>= return . view graph
-       let Just v = kf t
-           (_, t', _) = vf v
-       return (v, t')
+       case kf t of
+         Just v -> let (_, t', _) = vf v in return (v, t')
+         Nothing -> error $ "tgv: " ++ show mf ++ " " ++ show s
 
 -- | Find the simple graph node corresponding to the given type
 tgvSimple :: (MonadStates ExpandMap m, DsMonad m, MonadReaders TypeInfo m, MonadReaders TypeGraph m) => Type -> m TGVSimple'
@@ -197,8 +197,8 @@ tgvSimple' t =
        return $ fmap (\k -> (k, s)) (kf s)
 
 -- | Return the nodes adjacent to x in the lens graph.
-lensKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m, HasTGVSimple s) =>
-            s -> m (Set TGV')
+lensKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) =>
+            TGVSimple' -> m (Set TGV')
 lensKeys s = do
   g <- view' graph
   t <- tgv Nothing s
