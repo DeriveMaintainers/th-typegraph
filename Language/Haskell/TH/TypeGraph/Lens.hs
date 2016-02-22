@@ -22,7 +22,6 @@ import Control.Lens as Lens (_2, makeLensesFor, view)
 import Control.Monad.Readers (MonadReaders)
 import Control.Monad.States (MonadStates)
 import Control.Monad.Writer (execWriterT, tell)
-import Data.Graph (Vertex)
 import Data.Map as Map (keys, Map)
 import Data.Set (Set)
 import Language.Haskell.Exts.Syntax ()
@@ -45,7 +44,7 @@ import Prelude hiding ((.))
 -- makeLensesFor should be used instead.
 makeTypeGraphLenses :: forall m. (DsMonad m, MonadReaders TypeInfo m, MonadReaders TypeGraph m, MonadStates ExpandMap m) => m [Dec]
 makeTypeGraphLenses =
-    (allLensKeys :: m (Map (Vertex, TGVSimple) (Set (Vertex, TGV)))) >>= execWriterT . mapM doType . map (view (_2 . etype)) . Map.keys
+    (allLensKeys :: m (Map TGVSimple (Set TGV))) >>= execWriterT . mapM doType . map (view (_2 . etype)) . Map.keys
     where
       doType (E (ConT tname)) = qReify tname >>= doInfo
       doType _ = return ()
