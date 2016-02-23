@@ -136,7 +136,7 @@ stackType =
 stackLens :: TypeStack -> Q Exp
 stackLens stk =
     case view typeStack stk of
-      [] -> [| iso id id |]
+      [] -> [| id |]
       xs -> mapM fieldLens xs >>= foldl1 (\ a b -> [|$b . $a|]) . map return
 
 nthLens :: Int -> Lens' [a] a
