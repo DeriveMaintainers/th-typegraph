@@ -6,7 +6,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 module Language.Haskell.TH.TypeGraph.Prelude
-    ( pprint'
+    ( pprint1
+    , pprintW
+    , pprintL
     , OverTypes(overTypes)
     , unlifted
     , constructorName
@@ -29,8 +31,9 @@ import Data.Map as Map (Map, fromList, toList)
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Set as Set (fromList, Set, toList)
 import Language.Haskell.TH
-import Language.Haskell.TH.PprLib (ptext, hcat)
+import Language.Haskell.TH.PprLib
 import Language.Haskell.TH.Syntax (Lift(lift), Name(Name), NameFlavour(NameS), Quasi(qReify), StrictType, VarStrictType)
+import qualified Text.PrettyPrint as HPJ
 
 instance Ppr () where
     ppr () = ptext "()"
@@ -43,8 +46,17 @@ instance Ppr a => Ppr (L [a]) where
 -- | Pretty print a 'Ppr' value on a single line with each block of
 -- white space (newlines, tabs, etc.) converted to a single space, and
 -- all the module qualifiers removed from the names.
-pprint' :: (Ppr a, Data a) => a -> [Char]
-pprint' typ = unwords $ words $ pprint $ friendlyNames $ typ
+pprint1 :: (Ppr a, Data a) => a -> [Char]
+pprint1 typ = pprintStyle (HPJ.style {HPJ.mode = HPJ.OneLineMode}) $ friendlyNames $ typ
+
+pprintW :: (Ppr a, Data a) => a -> [Char]
+pprintW typ = pprintStyle (HPJ.style {HPJ.lineLength = 250}) $ friendlyNames $ typ
+
+pprintL :: (Ppr a, Data a) => a -> [Char]
+pprintL typ = pprintStyle (HPJ.style {HPJ.mode = HPJ.LeftMode}) $ friendlyNames $ typ
+
+pprintStyle :: (Data a, Ppr a) => HPJ.Style -> a -> String
+pprintStyle style x = HPJ.renderStyle style $ to_HPJ_Doc $ ppr $ friendlyNames x
 
 -- | Perform a fold over the Type and Info values embedded in t
 class OverTypes t where

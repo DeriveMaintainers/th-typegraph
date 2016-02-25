@@ -12,7 +12,7 @@ import Data.Set as Set (Set, delete, difference, empty, fromList, insert, member
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar ({- instances -})
 import Language.Haskell.TH.Syntax (Quasi(qReify))
-import Language.Haskell.TH.TypeGraph.Prelude (pprint')
+import Language.Haskell.TH.TypeGraph.Prelude (pprint1)
 
 data St
     = St { _result :: Set Name
@@ -77,7 +77,7 @@ go_info :: (Quasi m, MonadState St m) => [Type] -> Info -> m ()
 go_info params (TyConI dec) = go_dec params ({-trace ("go_dec " ++ show dec)-} dec)
 go_info params (FamilyI dec _insts) = go_dec params dec
 go_info _params (PrimTyConI _name _arity _unlifed) = return ()
-go_info _params info = error $ "go_info - unexpected: " ++ pprint' info
+go_info _params info = error $ "go_info - unexpected: " ++ pprint1 info
 go_dec :: (Quasi m, MonadState St m) => [Type] -> Dec -> m ()
 go_dec params (NewtypeD cx tname tvs con supers) = go_dec params (DataD cx tname tvs [con] supers)
 go_dec params (DataD _ tname tvs _ _) | length params > length tvs = error $ "Too many arguments to " ++ show tname
@@ -106,7 +106,7 @@ go_dec params (TySynD tname tvs typ) = do
 --
 -- so the parameter is bound to k, and $a should be free.
 go_dec params (FamilyD _flavour tname tvs _mkind) = go_params tname tvs params
-go_dec params dec = error $ "go_dec - unexpected: " ++ pprint' dec ++ ", params=" ++ show params
+go_dec params dec = error $ "go_dec - unexpected: " ++ pprint1 dec ++ ", params=" ++ show params
 
 go_params :: (Quasi m, MonadState St m) => Name -> [TyVarBndr] -> [Type] -> m ()
 go_params tname tvs params | length params  > length tvs = error $ "Too many arguments to " ++ show tname
@@ -117,7 +117,7 @@ go_param :: (Quasi m, MonadState St m) => TyVarBndr -> Maybe Type -> m ()
 go_param tvb (Just param) = do
   -- If there is a binding, add the free variables found in the type
   -- and remove the variable bound here
-  -- trace ("go_param " ++ "(" ++ pprint tvb ++ ", " ++ pprint' param ++ ")") (return ())
+  -- trace ("go_param " ++ "(" ++ pprint tvb ++ ", " ++ pprint1 param ++ ")") (return ())
   ftv param
   result %= Set.delete (tvbName tvb)
   -- let tv = tvbName tvb

@@ -7,7 +7,7 @@ module Language.Haskell.TH.TypeGraph.Arity
 import Language.Haskell.TH
 import Language.Haskell.TH.Desugar ({- instances -})
 import Language.Haskell.TH.Syntax (Quasi(qReify))
-import Language.Haskell.TH.TypeGraph.Prelude (pprint')
+import Language.Haskell.TH.TypeGraph.Prelude (pprint1)
 
 -- | Compute the arity of a type - the number of type parameters that
 -- must be applied to it in order to obtain a concrete type.  I'm not
@@ -22,13 +22,13 @@ typeArity t0 = typeArity' t0
       typeArity' (VarT _) = return 1
       typeArity' (AppT t _) = typeArity' t >>= \ n -> return $ n - 1
       typeArity' (ConT name) = qReify name >>= infoArity
-      typeArity' typ = error $ "typeArity (" ++ pprint' t0 ++ ") - unexpected type: " ++ show typ
+      typeArity' typ = error $ "typeArity (" ++ pprint1 t0 ++ ") - unexpected type: " ++ show typ
       infoArity (TyConI dec) = decArity dec
       infoArity (PrimTyConI _ _ _) = return 0
       infoArity (FamilyI dec _) = decArity dec
-      infoArity info = error $ "typeArity (" ++ pprint' t0 ++ ")- unexpected info: " ++ show info
+      infoArity info = error $ "typeArity (" ++ pprint1 t0 ++ ")- unexpected info: " ++ show info
       decArity (DataD _ _ vs _ _) = return $ length vs
       decArity (NewtypeD _ _ vs _ _) = return $ length vs
       decArity (TySynD _ vs t) = typeArity' t >>= \ n -> return $ n + length vs
       decArity (FamilyD _ _ vs _mk) = return $ {- not sure what to do with the kind mk here -} length vs
-      decArity dec = error $ "typeArity (" ++ pprint' t0 ++ ")- unexpected dec: " ++ show dec
+      decArity dec = error $ "typeArity (" ++ pprint1 t0 ++ ")- unexpected dec: " ++ show dec

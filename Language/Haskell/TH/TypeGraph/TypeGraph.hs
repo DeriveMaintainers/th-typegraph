@@ -26,7 +26,7 @@ module Language.Haskell.TH.TypeGraph.TypeGraph
     , allPathStarts
     , lensKeys, allLensKeys
     , tgv, tgvSimple, tgvSimple'
-    , pathKeys, allPathKeys
+    , pathKeys, pathKeys', allPathKeys
     , reachableFrom
     , reachableFromSimple
     , goalReachableFull
@@ -222,6 +222,12 @@ pathKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, Monad
 pathKeys s = do
   gs <- view' gsimple
   return $ Set.fromList $ reachable' gs s
+
+-- | Return the nodes reachable from x in the path graph.
+pathKeys' :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => TGV -> m (Set TGVSimple)
+pathKeys' s = do
+  gs <- view' graph
+  Set.fromList <$> Prelude.mapM simplify (reachable' gs s)
 
   -- allPathStarts >>= return . Map.fromList . List.map (\x -> (x, Set.fromList (reachable' gs x))) . Set.toList . Set.map (view vsimple)
 

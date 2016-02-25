@@ -41,7 +41,7 @@ import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax as TH (Lift(lift), Quasi(..))
 import Language.Haskell.TH.TypeGraph.Expand (E(E), ExpandMap, expandType)
-import Language.Haskell.TH.TypeGraph.Prelude (pprint')
+import Language.Haskell.TH.TypeGraph.Prelude (pprint1)
 import Language.Haskell.TH.TypeGraph.Shape (Field)
 import Language.Haskell.TH.TypeGraph.Vertex (TGV'(..), TGVSimple'(..), etype)
 
@@ -121,7 +121,7 @@ collectTypeInfo extraTypes typ0 = do
       doType'' ListT = return ()
       doType'' (VarT _) = return ()
       doType'' (TupleT _) = return ()
-      doType'' typ = error $ "makeTypeInfo: " ++ pprint' typ
+      doType'' typ = error $ "makeTypeInfo: " ++ pprint1 typ
 
       doInfo :: Name -> Info -> StateT TypeInfo m ()
       doInfo tname (TyConI dec) = do
@@ -136,7 +136,7 @@ collectTypeInfo extraTypes typ0 = do
       doDec (TySynD _tname _ typ) = doType typ
       doDec (NewtypeD _ tname _ constr _) = doCon tname constr
       doDec (DataD _ tname _ constrs _) = Foldable.mapM_ (doCon tname) constrs
-      doDec dec = error $ "makeTypeInfo: " ++ pprint' dec
+      doDec dec = error $ "makeTypeInfo: " ++ pprint1 dec
 
       doCon :: Name -> Con -> StateT TypeInfo m ()
       doCon tname (ForallC _ _ con) = doCon tname con
