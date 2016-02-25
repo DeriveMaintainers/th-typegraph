@@ -16,7 +16,7 @@ import Language.Haskell.TH.Desugar (DsMonad)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges)
 import Language.Haskell.TH.TypeGraph.Expand (E, unE, ExpandMap)
 import Language.Haskell.TH.TypeGraph.Edges (typeGraphEdges)
-import Language.Haskell.TH.TypeGraph.Prelude (pprint')
+import Language.Haskell.TH.TypeGraph.Prelude (pprint1)
 import Language.Haskell.TH.TypeGraph.Shape (Field)
 import Language.Haskell.TH.TypeGraph.TypeInfo (TypeInfo)
 import Language.Haskell.TH.TypeGraph.Vertex (etype, syns, TGV, TGV', TGVSimple, TypeGraphVertex, vsimple)
@@ -38,20 +38,20 @@ unReifyName = mkName . nameBase
 -- Some very nasty bug is triggered here in ghc-7.8 if we try to implement
 -- a generic function that unReifies the symbols.  Ghc-7.10 works fine
 
--- pprint'' :: (Data a, Ppr a) => a -> String
--- pprint'' = pprint' . unReify
+-- pprint' :: (Data a, Ppr a) => a -> String
+-- pprint' = pprint' . unReify
 
 pprintDec :: Dec -> String
-pprintDec = pprint' . unReify
+pprintDec = pprint1 . unReify
 
 pprintType :: E Type -> String
-pprintType = pprint' . unReify . view unE
+pprintType = pprint1 . unReify . view unE
 
 pprintVertex :: (Ppr v, Data v) => v -> String
-pprintVertex = pprint'
+pprintVertex = pprint1
 
 pprintPred :: E Pred -> String
-pprintPred = pprint' . unReify . view unE
+pprintPred = pprint1 . unReify . view unE
 
 edgesToStrings :: (TypeGraphVertex v, Ppr v, Data v) => GraphEdges v -> [(String, Set String)]
 edgesToStrings mp = List.map (\ (t, s) -> (pprintVertex t, Set.map pprintVertex s)) (Map.toList mp)

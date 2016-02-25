@@ -1,5 +1,5 @@
 name:               th-typegraph
-version:            0.32.1
+version:            0.33.1
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
@@ -40,6 +40,7 @@ library
     haskell-src-exts,
     mtl,
     mtl-unleashed >= 0.5,
+    pretty >= 1.1.2,
     set-extra,
     syb,
     template-haskell >= 2.10,
