@@ -67,7 +67,7 @@ import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (ptext, vcat)
 import Language.Haskell.TH.TypeGraph.Edges (GraphEdges, simpleEdges)
 import Language.Haskell.TH.TypeGraph.Expand (ExpandMap, expandType)
-import Language.Haskell.TH.TypeGraph.Prelude (adjacent', reachable')
+import Language.Haskell.TH.TypeGraph.Prelude (adjacent', pprint1, reachable')
 import Language.Haskell.TH.TypeGraph.TypeInfo (startTypes, TypeInfo, typeVertex, typeVertex', fieldVertex)
 import Language.Haskell.TH.TypeGraph.Shape (Field)
 import Language.Haskell.TH.TypeGraph.Stack (StackElement)
@@ -157,7 +157,7 @@ allPathStarts :: forall m. (DsMonad m, MonadStates ExpandMap m, MonadReaders Typ
                  m (Set TGVSimple)
 allPathStarts = do
   ts <- allPathNodes :: m (Set TGV)
-  Set.mapM (tgvSimple . bestType) ts
+  Set.mapM simplify ts
 
 view' :: MonadReaders s m => Getting b s b -> m b
 view' lns = view lns <$> askPoly
@@ -183,18 +183,16 @@ tgv mf s =
          Nothing -> error $ "tgv: " ++ show mf ++ " " ++ show s
 
 -- | Find the simple graph node corresponding to the given type
-tgvSimple :: (MonadStates ExpandMap m, DsMonad m, MonadReaders TypeInfo m, MonadReaders TypeGraph m) => Type -> m TGVSimple
+tgvSimple :: (MonadStates ExpandMap m, DsMonad m, MonadReaders TypeInfo m, MonadReaders TypeGraph m) => Type -> m (Maybe TGVSimple)
 tgvSimple t =
     do (_g, _vf, kf) <- askPoly >>= return . view gsimple
        s <- expandType t >>= typeVertex
-       let k = maybe (error ("tgvSimple: " ++ show t)) id (kf s)
-       return (k, s)
-
-tgvSimple' :: (MonadStates ExpandMap m, DsMonad m, MonadReaders TypeInfo m, MonadReaders TypeGraph m) => Type -> m (Maybe TGVSimple)
-tgvSimple' t =
-    do (_g, _vf, kf) <- askPoly >>= return . view gsimple
-       s <- expandType t >>= typeVertex
        return $ fmap (\k -> (k, s)) (kf s)
+
+tgvSimple' :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) =>
+              Int -> TGVSimple -> Type -> m TGVSimple
+tgvSimple' n v typ =
+    tgvSimple typ >>= maybe (error $ "tgvSimple' - no node for " ++ pprint1 typ ++ ", reached from " ++ pprint1 v ++ " (" ++ show n ++ ")") pure
 
 -- | Return the nodes adjacent to x in the lens graph.
 lensKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) =>
