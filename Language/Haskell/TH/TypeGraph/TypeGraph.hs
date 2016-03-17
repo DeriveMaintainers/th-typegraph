@@ -53,6 +53,7 @@ import Control.Monad.States (MonadStates)
 import Control.Monad.Trans (lift)
 import Data.Default (Default(def))
 import Data.Foldable as Fold
+import Data.Generics (Data)
 import Data.Graph hiding (edges)
 import Data.List as List (map)
 import Data.Map.Strict as Map (insertWith, Map)
@@ -189,8 +190,8 @@ tgvSimple t =
        s <- expandType t >>= typeVertex
        return $ fmap (\k -> (k, s)) (kf s)
 
-tgvSimple' :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) =>
-              Int -> TGVSimple -> Type -> m TGVSimple
+tgvSimple' :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m, Ppr v, Data v) =>
+              Int -> v -> Type -> m TGVSimple
 tgvSimple' n v typ =
     tgvSimple typ >>= maybe (error $ "tgvSimple' - no node for " ++ pprint1 typ ++ ", reached from " ++ pprint1 v ++ " (" ++ show n ++ ")") pure
 
@@ -224,8 +225,14 @@ pathKeys s = do
 -- | Return the nodes reachable from x in the path graph.
 pathKeys' :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) => TGV -> m (Set TGVSimple)
 pathKeys' s = do
-  gs <- view' graph
-  Set.fromList <$> Prelude.mapM simplify (reachable' gs s)
+#if 0
+  g <- view' graph
+  Set.fromList <$> Prelude.mapM simplify (reachable' g s)
+#else
+  s' <- simplify s
+  gs <- view' gsimple
+  pure $ Set.fromList $ reachable' gs s'
+#endif
 
   -- allPathStarts >>= return . Map.fromList . List.map (\x -> (x, Set.fromList (reachable' gs x))) . Set.toList . Set.map (view vsimple)
 

@@ -55,7 +55,7 @@ pprintW typ = pprintStyle (HPJ.style {HPJ.lineLength = 250}) $ friendlyNames $ t
 pprintL :: (Ppr a, Data a) => a -> [Char]
 pprintL typ = pprintStyle (HPJ.style {HPJ.mode = HPJ.LeftMode}) $ friendlyNames $ typ
 
-pprintStyle :: (Data a, Ppr a) => HPJ.Style -> a -> String
+pprintStyle :: (Ppr a, Data a) => HPJ.Style -> a -> String
 pprintStyle style x = HPJ.renderStyle style $ to_HPJ_Doc $ ppr $ friendlyNames x
 
 -- | Perform a fold over the Type and Info values embedded in t
