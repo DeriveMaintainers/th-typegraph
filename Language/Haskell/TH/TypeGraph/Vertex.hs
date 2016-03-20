@@ -6,6 +6,7 @@ module Language.Haskell.TH.TypeGraph.Vertex
     ( TypeGraphVertex(..)
     , TGV'(..), field, vsimple, TGV
     , TGVSimple'(..), syns, etype, TGVSimple
+    , bestTypeQ
     ) where
 
 import Control.Lens
@@ -104,6 +105,9 @@ class TypeGraphVertex v where
     -- any) used in its data declaration.  Note that this might return the
     -- empty set.
     bestType :: v -> Type
+
+bestTypeQ :: TypeGraphVertex v => v -> TypeQ
+bestTypeQ = pure . bestType
 
 instance TypeGraphVertex TGV' where
     typeNames = typeNames . _vsimple
