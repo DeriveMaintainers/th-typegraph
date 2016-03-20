@@ -190,10 +190,10 @@ tgvSimple t =
        s <- expandType t >>= typeVertex
        return $ fmap (\k -> (k, s)) (kf s)
 
-tgvSimple' :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m, Ppr v, Data v) =>
-              Int -> v -> Type -> m TGVSimple
-tgvSimple' n v typ =
-    tgvSimple typ >>= maybe (error $ "tgvSimple' - no node for " ++ pprint1 typ ++ ", reached from " ++ pprint1 v ++ " (" ++ show n ++ ")") pure
+tgvSimple' :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) =>
+              Type -> m TGVSimple
+tgvSimple' typ =
+    tgvSimple typ >>= maybe (error $ "tgvSimple' - no node for " ++ pprint1 typ) pure
 
 -- | Return the nodes adjacent to x in the lens graph.
 lensKeys :: (DsMonad m, MonadStates ExpandMap m, MonadReaders TypeGraph m, MonadReaders TypeInfo m) =>
