@@ -18,7 +18,6 @@ module Language.Haskell.TH.TypeGraph.Prelude
     , unReifyName
     , adjacent'
     , reachable'
-    , L(L)
     , friendlyNames
     ) where
 
@@ -38,25 +37,35 @@ import qualified Text.PrettyPrint as HPJ
 instance Ppr () where
     ppr () = ptext "()"
 
-newtype L a = L a
-
-instance Ppr a => Ppr (L [a]) where
-    ppr (L l) = hcat ([ptext "["] ++ intersperse (ptext ", ") (map ppr l) ++ [ptext "]"])
-
 -- | Pretty print a 'Ppr' value on a single line with each block of
 -- white space (newlines, tabs, etc.) converted to a single space, and
--- all the module qualifiers removed from the names.
+-- all the module qualifiers removed from the names.  (If the data type
+-- has no 'Name' values the friendlyNames function has no effect.)
 pprint1 :: (Ppr a, Data a) => a -> [Char]
-pprint1 typ = pprintStyle (HPJ.style {HPJ.mode = HPJ.OneLineMode}) $ friendlyNames $ typ
+pprint1 = pprintStyle (HPJ.style {HPJ.mode = HPJ.OneLineMode}) . friendlyNames
 
+-- | Pretty print with friendly names and wide lines
 pprintW :: (Ppr a, Data a) => a -> [Char]
-pprintW typ = pprintStyle (HPJ.style {HPJ.lineLength = 250}) $ friendlyNames $ typ
+pprintW = pprintStyle (HPJ.style {HPJ.lineLength = 250}) . friendlyNames
 
+-- | Pretty print with friendly names in left mode
 pprintL :: (Ppr a, Data a) => a -> [Char]
-pprintL typ = pprintStyle (HPJ.style {HPJ.mode = HPJ.LeftMode}) $ friendlyNames $ typ
+pprintL = pprintStyle (HPJ.style {HPJ.mode = HPJ.LeftMode}) . friendlyNames
 
+-- | Helper function for pprint1 et. al.
 pprintStyle :: (Ppr a, Data a) => HPJ.Style -> a -> String
-pprintStyle style x = HPJ.renderStyle style $ to_HPJ_Doc $ ppr $ friendlyNames x
+pprintStyle style = HPJ.renderStyle style . to_HPJ_Doc . ppr . friendlyNames
+
+-- | Make a template haskell value more human reader friendly.  The
+-- result almost certainly won't be compilable.  That's ok, though,
+-- because the input is usually uncompilable - it imports hidden modules,
+-- uses infix operators in invalid positions, puts module qualifiers in
+-- places where they are not allowed, and maybe other things.
+friendlyNames :: Data a => a -> a
+friendlyNames =
+    everywhere (mkT friendlyName)
+    where
+      friendlyName (Name x _) = Name x NameS -- Remove all module qualifiers
 
 -- | Perform a fold over the Type and Info values embedded in t
 class OverTypes t where
@@ -157,14 +166,3 @@ reachable' (g, vf, kf) (_, k) =
       ks = map (view _2 . vf) $ reachableVerts
       reachableVerts = Graph.reachable g v
       v = fromMaybe (error "Language.Haskell.TH.TypeGraph.Prelude.reachable") (kf k)
-
--- | Make a template haskell value more human reader friendly.  The
--- result almost certainly won't be compilable.  That's ok, though,
--- because the input is usually uncompilable - it imports hidden modules,
--- uses infix operators in invalid positions, puts module qualifiers in
--- places where they are not allowed, and maybe other things.
-friendlyNames :: Data a => a -> a
-friendlyNames =
-    everywhere (mkT friendlyName)
-    where
-      friendlyName (Name x _) = Name x NameS -- Remove all module qualifiers
