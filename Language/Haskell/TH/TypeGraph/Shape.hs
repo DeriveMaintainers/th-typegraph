@@ -12,6 +12,7 @@ module Language.Haskell.TH.TypeGraph.Shape
     , constructorName
     , constructorFields
     , constructorFieldTypes
+    , constructorPat
     , fPos
     , fName
     , fType
@@ -108,3 +109,10 @@ constructorName (ForallC _ _ con) = constructorName con
 constructorName (NormalC cname _) = cname
 constructorName (RecC cname _) = cname
 constructorName (InfixC _ cname _) = cname
+
+-- | Build a pattern that will match only values with the given constructor.
+constructorPat :: Con -> PatQ
+constructorPat (ForallC _ _ con) = constructorPat con
+constructorPat (NormalC cname _) = recP cname []
+constructorPat (RecC cname _) = recP cname []
+constructorPat (InfixC _ cname _) = infixP wildP cname wildP
