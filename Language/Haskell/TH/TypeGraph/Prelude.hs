@@ -25,7 +25,6 @@ import Control.Lens hiding (cons)
 import Control.Monad (foldM)
 import Data.Generics (Data, everywhere, mkT)
 import Data.Graph as Graph
-import Data.List (intersperse)
 import Data.Map as Map (Map, fromList, toList)
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Set as Set (fromList, Set, toList)
@@ -45,8 +44,8 @@ pprint1 :: (Ppr a, Data a) => a -> [Char]
 pprint1 = pprintStyle (HPJ.style {HPJ.mode = HPJ.OneLineMode}) . friendlyNames
 
 -- | Pretty print with friendly names and wide lines
-pprintW :: (Ppr a, Data a) => a -> [Char]
-pprintW = pprintStyle (HPJ.style {HPJ.lineLength = 250}) . friendlyNames
+pprintW :: (Ppr a, Data a) => Int -> a -> [Char]
+pprintW w = pprintStyle (HPJ.style {HPJ.lineLength = w}) . friendlyNames
 
 -- | Pretty print with friendly names in left mode
 pprintL :: (Ppr a, Data a) => a -> [Char]

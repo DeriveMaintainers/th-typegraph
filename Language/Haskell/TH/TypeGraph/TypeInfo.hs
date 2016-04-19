@@ -60,7 +60,7 @@ data TypeInfo
       -- ^ Map of the expansion of all encountered types
       , _synonyms :: Map (E Type) (Set Name)
       -- ^ The types with all type synonyms replaced with their expansions.
-      , _fields :: Map (E Type) (Set (Name, Name, Either Int Name))
+      , _fields :: Map (E Type) (Set Field)
       -- ^ Map from field type to field names
       } deriving (Show, Eq, Ord)
 
@@ -140,11 +140,11 @@ collectTypeInfo extraTypes typ0 = do
 
       doCon :: Name -> Con -> StateT TypeInfo m ()
       doCon tname (ForallC _ _ con) = doCon tname con
-      doCon tname (NormalC cname flds) = Foldable.mapM_ doField (zip (List.map (\n -> (tname, cname, Left n)) ([1..] :: [Int])) (List.map snd flds))
-      doCon tname (RecC cname flds) = Foldable.mapM_ doField (List.map (\ (fname, _, ftype) -> ((tname, cname, Right fname), ftype)) flds)
-      doCon tname (InfixC (_, lhs) cname (_, rhs)) = Foldable.mapM_ doField [((tname, cname, Left 1), lhs), ((tname, cname, Left 2), rhs)]
+      doCon tname con@(NormalC _cname flds) = Foldable.mapM_ doField (zip (List.map (\n -> (tname, con, Left n)) ([1..] :: [Int])) (List.map snd flds))
+      doCon tname con@(RecC _cname flds) = Foldable.mapM_ doField (List.map (\ (fname, _, ftype) -> ((tname, con, Right fname), ftype)) flds)
+      doCon tname con@(InfixC (_, lhs) _cname (_, rhs)) = Foldable.mapM_ doField [((tname, con, Left 1), lhs), ((tname, con, Left 2), rhs)]
 
-      doField :: ((Name, Name, Either Int Name), Type) -> StateT TypeInfo m ()
+      doField :: (Field, Type) -> StateT TypeInfo m ()
       doField (fld, ftyp) = do
         etyp <- expandType ftyp
         fields %= Map.insertWith union etyp (singleton fld)

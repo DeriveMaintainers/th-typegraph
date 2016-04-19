@@ -89,14 +89,14 @@ typeGraphEdges = do
 
       doCon :: Set TGV' -> Name -> Con -> StateT (GraphEdges TGV') m ()
       doCon vs tname (ForallC _ _ con) = doCon vs tname con
-      doCon vs tname (NormalC cname flds) = mapM_ (uncurry (doField vs tname cname)) (List.map (\ (n, (_, ftype)) -> (Left n, ftype)) (zip [1..] flds))
-      doCon vs tname (RecC cname flds) = mapM_ (uncurry (doField vs tname cname)) (List.map (\ (fname, _, ftype) -> (Right fname, ftype)) flds)
-      doCon vs tname (InfixC (_, lhs) cname (_, rhs)) = doField vs tname cname (Left 1) lhs >> doField vs tname cname (Left 2) rhs
+      doCon vs tname con@(NormalC _cname flds) = mapM_ (uncurry (doField vs tname con)) (List.map (\ (n, (_, ftype)) -> (Left n, ftype)) (zip [1..] flds))
+      doCon vs tname con@(RecC _cname flds) = mapM_ (uncurry (doField vs tname con)) (List.map (\ (fname, _, ftype) -> (Right fname, ftype)) flds)
+      doCon vs tname con@(InfixC (_, lhs) _cname (_, rhs)) = doField vs tname con (Left 1) lhs >> doField vs tname con (Left 2) rhs
 
       -- Connect the vertex for this record type to one particular field vertex
-      doField ::  DsMonad m => Set TGV' -> Name -> Name -> Either Int Name -> Type -> StateT (GraphEdges TGV') m ()
-      doField vs tname cname fld ftyp = do
-        v2 <- lift (expandType ftyp) >>= fieldVertex (tname, cname, fld)
+      doField ::  DsMonad m => Set TGV' -> Name -> Con -> Either Int Name -> Type -> StateT (GraphEdges TGV') m ()
+      doField vs tname con fld ftyp = do
+        v2 <- lift (expandType ftyp) >>= fieldVertex (tname, con, fld)
         v3 <- lift (expandType ftyp) >>= typeVertex'
         edge v2 v3
         mapM_ (flip edge v2) vs

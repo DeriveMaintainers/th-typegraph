@@ -53,7 +53,6 @@ import Control.Monad.States (MonadStates)
 import Control.Monad.Trans (lift)
 import Data.Default (Default(def))
 import Data.Foldable as Fold
-import Data.Generics (Data)
 import Data.Graph hiding (edges)
 import Data.List as List (map)
 import Data.Map.Strict as Map (insertWith, Map)
@@ -284,8 +283,7 @@ typeGraphVertex typ = do
         -- magnify typeInfo $ vertex Nothing typ'
 
 -- | Return the TGV associated with a particular type and field.
-typeGraphVertexOfField :: ({-MonadReaders TypeGraph m,-} MonadReaders TypeInfo m, MonadStates ExpandMap m, DsMonad m) =>
-                          (Name, Name, Either Int Name) -> Type -> m TGV'
+typeGraphVertexOfField :: (MonadReaders TypeInfo m, MonadStates ExpandMap m, DsMonad m) => Field -> Type -> m TGV'
 typeGraphVertexOfField fld typ = do
         typ' <- expandType typ
         askPoly >>= \(ti :: TypeInfo) -> MTL.runReaderT (fieldVertex fld typ') ti

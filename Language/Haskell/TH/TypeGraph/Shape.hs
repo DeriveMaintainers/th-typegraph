@@ -31,22 +31,16 @@ import Language.Haskell.TH.TypeGraph.Expand (E)
 -- FieldType and Field should be merged, or made less rudundant.
 
 type Field = ( Name, -- type name
-               Name, -- constructor name
+               Con,  -- constructor
                Either Int -- field position
                       Name -- field name
              )
 
-constructorFields :: Name -> Con -> [Field]
-constructorFields tname (ForallC _ _ con) = constructorFields tname con
-constructorFields tname (NormalC cname fields) = map (\(i, _) -> (tname, cname, Left i)) (zip ([1..] :: [Int]) fields)
-constructorFields tname (RecC cname fields) = map (\ (fname, _, _typ) -> (tname, cname, Right fname)) fields
-constructorFields tname (InfixC (_, _lhs) cname (_, _rhs)) = [(tname, cname, Left 1), (tname, cname, Left 2)]
-
 instance Ppr Field where
-    ppr (tname, cname, field) = ptext $
+    ppr (tname, con, field) = ptext $
         "field " ++
         show (unReifyName tname) ++ "." ++
-        either (\ n -> show (unReifyName cname) ++ "[" ++ show n ++ "]") (\ f -> show (unReifyName f)) field
+        either (\ n -> show (unReifyName (constructorName con)) ++ "[" ++ show n ++ "]") (\ f -> show (unReifyName f)) field
 
 instance Ppr (Maybe Field, E Type) where
     ppr (mf, typ) = ptext $ pprint typ ++ maybe "" (\fld -> " (field " ++ pprint fld ++ ")") mf
@@ -101,3 +95,15 @@ constructorFieldTypes (ForallC _ _ con) = constructorFieldTypes con
 constructorFieldTypes (NormalC _ ts) = map (uncurry Positional) (zip [1..] ts)
 constructorFieldTypes (RecC _ ts) = map Named ts
 constructorFieldTypes (InfixC t1 _ t2) = [Positional 1 t1, Positional 2 t2]
+
+constructorFields :: Name -> Con -> [Field]
+constructorFields tname (ForallC _ _ con) = constructorFields tname con
+constructorFields tname con@(NormalC _cname fields) = map (\(i, _) -> (tname, con, Left i)) (zip ([1..] :: [Int]) fields)
+constructorFields tname con@(RecC _cname fields) = map (\ (fname, _, _typ) -> (tname, con, Right fname)) fields
+constructorFields tname con@(InfixC (_, _lhs) _cname (_, _rhs)) = [(tname, con, Left 1), (tname, con, Left 2)]
+
+constructorName :: Con -> Name
+constructorName (ForallC _ _ con) = constructorName con
+constructorName (NormalC cname _) = cname
+constructorName (RecC cname _) = cname
+constructorName (InfixC _ cname _) = cname
