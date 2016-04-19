@@ -7,9 +7,10 @@ module Language.Haskell.TH.TypeGraph.Shape
     ( 
     -- * Field name and position
       Field
-    , constructorFields
     , FieldType(..)
     , fieldType
+    , constructorName
+    , constructorFields
     , constructorFieldTypes
     , fPos
     , fName
