@@ -137,9 +137,6 @@ declarationName (DefaultSigD name _) = Just name
 declarationType :: Dec -> Maybe Type
 declarationType = fmap ConT . declarationName
 
-instance (Lift a, Lift b) => Lift (Map a b) where
-    lift mp = [|Map.fromList $(lift (Map.toList mp))|]
-
 unReify :: Data a => a -> a
 unReify = everywhere (mkT unReifyName)
 
