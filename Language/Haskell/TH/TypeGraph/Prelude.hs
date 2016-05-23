@@ -137,9 +137,6 @@ declarationName (DefaultSigD name _) = Just name
 declarationType :: Dec -> Maybe Type
 declarationType = fmap ConT . declarationName
 
-instance Lift a => Lift (Set a) where
-    lift s = [|Set.fromList $(lift (Set.toList s))|]
-
 instance (Lift a, Lift b) => Lift (Map a b) where
     lift mp = [|Map.fromList $(lift (Map.toList mp))|]
 

@@ -46,6 +46,7 @@ library
     syb,
     template-haskell >= 2.10,
     th-desugar,
+    th-lift-instances >= 0.1.7,
     th-orphans >= 0.10.0
 
 test-suite th-typegraph-tests
