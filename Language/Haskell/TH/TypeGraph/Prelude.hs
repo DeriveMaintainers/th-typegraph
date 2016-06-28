@@ -32,6 +32,7 @@ import Language.Haskell.TH
 import Language.Haskell.TH.PprLib
 import Language.Haskell.TH.Syntax (Lift(lift), Name(Name), NameFlavour(NameS), Quasi(qReify), StrictType, VarStrictType)
 import qualified Text.PrettyPrint as HPJ
+import Instances.TH.Lift () -- extra Lift instances
 
 instance Ppr () where
     ppr () = ptext "()"
