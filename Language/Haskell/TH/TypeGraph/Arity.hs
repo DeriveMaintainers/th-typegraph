@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 -- | Function to compute the arity or kind of a Type, the number of
 -- type parameters that need to be applied to get a concrete type.
 module Language.Haskell.TH.TypeGraph.Arity
@@ -27,8 +29,17 @@ typeArity t0 = typeArity' t0
       infoArity (PrimTyConI _ _ _) = return 0
       infoArity (FamilyI dec _) = decArity dec
       infoArity info = error $ "typeArity (" ++ pprint1 t0 ++ ")- unexpected info: " ++ show info
+#if MIN_VERSION_template_haskell(2,11,0)
+      decArity (DataD _ _ vs _ _ _) = return $ length vs
+      decArity (NewtypeD _ _ vs _ _ _) = return $ length vs
+#else
       decArity (DataD _ _ vs _ _) = return $ length vs
       decArity (NewtypeD _ _ vs _ _) = return $ length vs
+#endif
       decArity (TySynD _ vs t) = typeArity' t >>= \ n -> return $ n + length vs
+#if MIN_VERSION_template_haskell(2,11,0)
+      decArity (DataFamilyD _ vs _mk) = return $ {- not sure what to do with the kind mk here -} length vs
+#else
       decArity (FamilyD _ _ vs _mk) = return $ {- not sure what to do with the kind mk here -} length vs
+#endif
       decArity dec = error $ "typeArity (" ++ pprint1 t0 ++ ")- unexpected dec: " ++ show dec

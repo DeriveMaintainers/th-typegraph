@@ -91,8 +91,13 @@ prettyStack stk = prettyType (view topType stk) ++ " → " ++ prettyStack' (reve
       prettyTail (x : xs) = " → " ++ prettyElt x ++ prettyTail xs
       prettyElt (StackElement fld con dec) = prettyDec dec ++ ":" ++ prettyCon con ++ "." ++ pprint fld
       prettyDec (TySynD _ _ typ) = prettyType typ
+#if MIN_VERSION_template_haskell(2,11,0)
+      prettyDec (NewtypeD _ name _ _ _ _) = nameBase name
+      prettyDec (DataD _ name _ _ _ _) = nameBase name
+#else
       prettyDec (NewtypeD _ name _ _ _) = nameBase name
       prettyDec (DataD _ name _ _ _) = nameBase name
+#endif
       prettyDec dec = error $ "prettyStack: " ++ show dec
       prettyCon = nameBase . constructorName
       prettyType (AppT t1 t2) = "((" ++ prettyType t1 ++ ") (" ++ prettyType t2 ++ "))"

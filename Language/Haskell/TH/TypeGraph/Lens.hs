@@ -48,8 +48,13 @@ makeTypeGraphLenses =
     where
       doType (E (ConT tname)) = qReify tname >>= doInfo
       doType _ = return ()
+#if MIN_VERSION_template_haskell(2,11,0)
+      doInfo (TyConI (NewtypeD _ tname _ _ _ _)) = lensNamePairs namer tname >>= \pairs -> runQ (makeLensesFor pairs tname) >>= tell
+      doInfo (TyConI (DataD _ tname _ _ _ _)) = lensNamePairs namer tname >>= \pairs -> runQ (makeLensesFor pairs tname) >>= tell
+#else
       doInfo (TyConI (NewtypeD _ tname _ _ _)) = lensNamePairs namer tname >>= \pairs -> runQ (makeLensesFor pairs tname) >>= tell
       doInfo (TyConI (DataD _ tname _ _ _)) = lensNamePairs namer tname >>= \pairs -> runQ (makeLensesFor pairs tname) >>= tell
+#endif
       doInfo _ = return ()
 
 namer :: Name -> Name -> Name -> (String, String)
@@ -62,8 +67,13 @@ lensNamePairs namefn tname =
     where
       doInfo (TyConI dec) = doDec dec
       doInfo _ = return ()
+#if MIN_VERSION_template_haskell(2,11,0)
+      doDec (NewtypeD _ _ _ _ con _) = doCon con
+      doDec (DataD _ _ _ _ cons _) = mapM_ doCon cons
+#else
       doDec (NewtypeD _ _ _ con _) = doCon con
       doDec (DataD _ _ _ cons _) = mapM_ doCon cons
+#endif
       doDec (TySynD _ _ _) = return ()
       doDec _ = return ()
       doCon (ForallC _ _ con) = doCon con

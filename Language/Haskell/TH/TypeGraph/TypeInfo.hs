@@ -134,8 +134,13 @@ collectTypeInfo extraTypes typ0 = do
 
       doDec :: Dec -> StateT TypeInfo m ()
       doDec (TySynD _tname _ typ) = doType typ
+#if MIN_VERSION_template_haskell(2,11,0)
+      doDec (NewtypeD _ tname _ _ constr _) = doCon tname constr
+      doDec (DataD _ tname _ _ constrs _) = Foldable.mapM_ (doCon tname) constrs
+#else
       doDec (NewtypeD _ tname _ constr _) = doCon tname constr
       doDec (DataD _ tname _ constrs _) = Foldable.mapM_ (doCon tname) constrs
+#endif
       doDec dec = error $ "makeTypeInfo: " ++ pprint1 dec
 
       doCon :: Name -> Con -> StateT TypeInfo m ()

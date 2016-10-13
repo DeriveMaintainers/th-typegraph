@@ -79,6 +79,16 @@ go_info params (FamilyI dec _insts) = go_dec params dec
 go_info _params (PrimTyConI _name _arity _unlifed) = return ()
 go_info _params info = error $ "go_info - unexpected: " ++ pprint1 info
 go_dec :: (Quasi m, MonadState St m) => [Type] -> Dec -> m ()
+#if MIN_VERSION_template_haskell(2,11,0)
+go_dec params (NewtypeD cx tname tvs m con supers) = go_dec params (DataD cx tname tvs m [con] supers)
+go_dec params (DataD _ tname tvs _ _ _) | length params > length tvs = error $ "Too many arguments to " ++ show tname
+go_dec params (DataD _cx tname tvs _ cons _supers) = do
+  -- For each type variable bound to a type parameter,
+  -- replace the type variable with the free variables
+  -- in the parameter
+  ftv cons
+  go_params tname tvs params
+#else
 go_dec params (NewtypeD cx tname tvs con supers) = go_dec params (DataD cx tname tvs [con] supers)
 go_dec params (DataD _ tname tvs _ _) | length params > length tvs = error $ "Too many arguments to " ++ show tname
 go_dec params (DataD _cx tname tvs cons _supers) = do
@@ -87,6 +97,7 @@ go_dec params (DataD _cx tname tvs cons _supers) = do
   -- in the parameter
   ftv cons
   go_params tname tvs params
+#endif
 go_dec params (TySynD tname tvs typ) = do
   -- Add the free variables in the type, then subtract the ones that
   -- are bound here.
@@ -105,7 +116,11 @@ go_dec params (TySynD tname tvs typ) = do
 --    params=[ConT AbbrevPairID]
 --
 -- so the parameter is bound to k, and $a should be free.
+#if MIN_VERSION_template_haskell(2,11,0)
+go_dec params (DataFamilyD tname tvs _mkind) = go_params tname tvs params
+#else
 go_dec params (FamilyD _flavour tname tvs _mkind) = go_params tname tvs params
+#endif
 go_dec params dec = error $ "go_dec - unexpected: " ++ pprint1 dec ++ ", params=" ++ show params
 
 go_params :: (Quasi m, MonadState St m) => Name -> [TyVarBndr] -> [Type] -> m ()

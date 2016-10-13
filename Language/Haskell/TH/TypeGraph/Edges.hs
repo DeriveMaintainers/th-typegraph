@@ -83,8 +83,13 @@ typeGraphEdges = do
 
       doDec :: Set TGV' -> Dec -> StateT (GraphEdges TGV') m ()
       doDec _ (TySynD _ _ _) = return () -- This type will be in typeSet
+#if MIN_VERSION_template_haskell(2,11,0)
+      doDec vs (NewtypeD _ tname _ _ constr _) = doCon vs tname constr
+      doDec vs (DataD _ tname _ _ constrs _) = mapM_ (doCon vs tname) constrs
+#else
       doDec vs (NewtypeD _ tname _ constr _) = doCon vs tname constr
       doDec vs (DataD _ tname _ constrs _) = mapM_ (doCon vs tname) constrs
+#endif
       doDec _ _ = return ()
 
       doCon :: Set TGV' -> Name -> Con -> StateT (GraphEdges TGV') m ()

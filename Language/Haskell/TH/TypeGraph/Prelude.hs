@@ -72,8 +72,13 @@ class OverTypes t where
     overTypes :: Quasi m => (a -> Either Info Type -> m a) -> a -> t -> m a
 
 instance OverTypes Dec where
+#if MIN_VERSION_template_haskell(2,11,0)
+    overTypes f a (DataD _ _ _ _ cons _) = foldM (overTypes f) a cons
+    overTypes f a (NewtypeD _ _ _ _ con _) = overTypes f a con
+#else
     overTypes f a (DataD _ _ _ cons _) = foldM (overTypes f) a cons
     overTypes f a (NewtypeD _ _ _ con _) = overTypes f a con
+#endif
     overTypes f a (TySynD _ _ typ) = overTypes f a typ
     overTypes _ a _ = return a
 
@@ -117,20 +122,36 @@ constructorName (InfixC _ name _) = name
 declarationName :: Dec -> Maybe Name
 declarationName (FunD name _) = Just name
 declarationName (ValD _pat _body _decs) = Nothing
+#if MIN_VERSION_template_haskell(2,11,0)
+declarationName (DataD _ name _ _ _ _) = Just name
+declarationName (NewtypeD _ name _ _ _ _) = Just name
+#else
 declarationName (DataD _ name _ _ _) = Just name
 declarationName (NewtypeD _ name _ _ _) = Just name
+#endif
 declarationName (TySynD name _ _) = Just name
 declarationName (ClassD _ name _ _ _) = Just name
+#if MIN_VERSION_template_haskell(2,11,0)
+declarationName (InstanceD _ _ _ _) = Nothing
+#else
 declarationName (InstanceD _ _ _) = Nothing
+#endif
 declarationName (SigD name _) = Just name
 declarationName (ForeignD _) = Nothing
 declarationName (InfixD _ name) = Just name
 declarationName (PragmaD _) = Nothing
+#if MIN_VERSION_template_haskell(2,11,0)
+declarationName (DataFamilyD _name _ _) = Nothing
+declarationName (DataInstD _ name _ _ _ _) = Just name
+declarationName (NewtypeInstD _ name _ _ _ _) = Just name
+declarationName (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) = Just name
+#else
 declarationName (FamilyD _ _name _ _) = Nothing
 declarationName (DataInstD _ name _ _ _) = Just name
 declarationName (NewtypeInstD _ name _ _ _) = Just name
-declarationName (TySynInstD name _) = Just name
 declarationName (ClosedTypeFamilyD name _ _ _) = Just name
+#endif
+declarationName (TySynInstD name _) = Just name
 declarationName (RoleAnnotD name _) = Just name
 declarationName (StandaloneDerivD _ _) = Nothing
 declarationName (DefaultSigD name _) = Just name
