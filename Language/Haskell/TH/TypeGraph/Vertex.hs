@@ -20,7 +20,7 @@ import Language.Haskell.TH -- (Con, Dec, nameBase, Type)
 import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.PprLib (hang, hcat, ptext, text, vcat)
 import Language.Haskell.TH.Syntax (Lift(lift))
-import Language.Haskell.TH.TypeGraph.Expand (E(E), unE)
+import Language.Haskell.TH.Expand (E(E), unE)
 import Language.Haskell.TH.TypeGraph.Prelude (unReify, unReifyName)
 import Language.Haskell.TH.TypeGraph.Shape (Field)
 

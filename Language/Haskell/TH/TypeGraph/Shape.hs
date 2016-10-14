@@ -28,7 +28,7 @@ import Language.Haskell.TH.Desugar ({- instances -})
 import Language.Haskell.TH.PprLib (ptext)
 import Language.Haskell.TH.Syntax
 import Language.Haskell.TH.TypeGraph.Prelude (unReifyName)
-import Language.Haskell.TH.TypeGraph.Expand (E)
+import Language.Haskell.TH.Expand (E)
 
 -- FieldType and Field should be merged, or made less rudundant.
 

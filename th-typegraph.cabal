@@ -23,7 +23,6 @@ library
   exposed-modules:
     Language.Haskell.TH.TypeGraph.Arity
     Language.Haskell.TH.TypeGraph.Edges
-    Language.Haskell.TH.TypeGraph.Expand
     Language.Haskell.TH.TypeGraph.Free
     Language.Haskell.TH.TypeGraph.Lens
     Language.Haskell.TH.TypeGraph.Prelude
@@ -45,6 +44,7 @@ library
     set-extra,
     syb,
     template-haskell >= 2.10,
+    th-context,
     th-desugar,
     th-lift-instances >= 0.1.7,
     th-orphans >= 0.10.0
