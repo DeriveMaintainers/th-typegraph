@@ -1,5 +1,5 @@
 name:               th-typegraph
-version:            0.35.1
+version:            1.0
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
@@ -11,52 +11,46 @@ homepage:           https://github.com/seereason/th-typegraph
 bug-reports:        https://github.com/seereason/th-typegraph/issues
 stability:          experimental
 synopsis:           Graph of the subtype relation
-description:        Build a graph whose nodes are Types and whose edges represent
-                    the subtype relation: Char is a subtype of Maybe Char, Int is
-                    a subtype of (Int, Double), and so on.
+description:        This package is not the successor to th-typegraph-0.43, it is
+                    a brand new package which forms the basis of a new package that
+                    what will eventually do what th-typegraph was supposed to.  What
+                    it *can* do is traverse the type "TypeQ", and includes versions
+                    of deriveSafeCopy and derivePathInfo that use the traversal to
+                    avoid adding phantom types to the context of the instance.
 extra-source-files: test/Common.hs test/Tests.hs test/TypeGraph.hs test/Values.hs
 tested-with: GHC == 7.10.3, GHC == 7.11.*
 library
   default-language: Haskell2010
-  hs-source-dirs: .
+  hs-source-dirs: src
   ghc-options: -Wall -O2
   exposed-modules:
-    Language.Haskell.TH.TypeGraph.Arity
-    Language.Haskell.TH.TypeGraph.Edges
-    Language.Haskell.TH.TypeGraph.Free
-    Language.Haskell.TH.TypeGraph.Lens
-    Language.Haskell.TH.TypeGraph.Prelude
-    Language.Haskell.TH.TypeGraph.Shape
-    Language.Haskell.TH.TypeGraph.Stack
-    Language.Haskell.TH.TypeGraph.TypeGraph
-    Language.Haskell.TH.TypeGraph.TypeInfo
-    Language.Haskell.TH.TypeGraph.Vertex
+    Language.Haskell.TH.TypeGraph.Orphans
+    Language.Haskell.TH.TypeGraph.Phantom
+    Language.Haskell.TH.TypeGraph.SafeCopyDerive
+    Language.Haskell.TH.TypeGraph.TypeTraversal
+    Language.Haskell.TH.TypeGraph.WebRoutesTH
   build-depends:
+    aeson,
     base >= 4.8 && < 5,
-    base-compat,
+    cereal,
     containers,
-    data-default,
-    haskell-src-exts,
+    fgl,
     lens,
     mtl,
-    mtl-unleashed >= 0.5,
+    parsec,
     pretty >= 1.1.2,
-    set-extra,
+    safecopy,
+    split,
     syb,
     template-haskell >= 2.10,
-    th-context,
+    text,
     th-desugar,
+    th-lift,
     th-lift-instances >= 0.1.7,
-    th-orphans >= 0.10.0
-
-test-suite th-typegraph-tests
-  type:             exitcode-stdio-1.0
-  hs-source-dirs:   test
-  main-is:          Tests.hs
-  build-depends:    array, base, bytestring, containers, data-default, deepseq, ghc-prim,
-                    hspec, hspec-core, lens, mtl, mtl-unleashed >= 0.5, syb, template-haskell, text,
-                    th-typegraph, th-desugar, th-orphans, th-reify-many
-  default-language: Haskell2010
+    th-orphans,
+    time,
+    userid,
+    web-routes
 
 source-repository head
   type:     git
