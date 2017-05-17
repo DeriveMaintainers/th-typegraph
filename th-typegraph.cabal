@@ -17,7 +17,6 @@ description:        This package is not the successor to th-typegraph-0.43, it i
                     it *can* do is traverse the type "TypeQ", and includes versions
                     of deriveSafeCopy and derivePathInfo that use the traversal to
                     avoid adding phantom types to the context of the instance.
-extra-source-files: test/Common.hs test/Tests.hs test/TypeGraph.hs test/Values.hs
 tested-with: GHC == 7.10.3, GHC == 7.11.*
 library
   default-language: Haskell2010
