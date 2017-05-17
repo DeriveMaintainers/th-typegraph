@@ -8,6 +8,9 @@
 module Language.Haskell.TH.TypeGraph.Orphans where
 
 import Data.Aeson (FromJSON(parseJSON), Value(Null), ToJSON(toJSON))
+#if !MIN_VERSION_aeson(0,11,0)
+import Data.Aeson.Types (typeMismatch)
+#endif
 import qualified Data.Graph.Inductive as G
 import Data.Proxy (Proxy(Proxy))
 import Data.Set as Set (Set, toList)
