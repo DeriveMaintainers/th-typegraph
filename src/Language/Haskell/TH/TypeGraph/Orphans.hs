@@ -8,7 +8,7 @@
 module Language.Haskell.TH.TypeGraph.Orphans where
 
 import Data.Aeson (FromJSON(parseJSON), Value(Null), ToJSON(toJSON))
-#if MIN_VERSION_aeson(1,0.0)
+#if MIN_VERSION_aeson(1,0,0)
 import Data.Aeson (ToJSONKey, FromJSONKey)
 #endif
 #if !MIN_VERSION_aeson(0,11,0)
