@@ -1,5 +1,6 @@
 -- | Compute which type parameters are phantom types.
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -76,8 +77,13 @@ nonPhantom tname =
     runQ (reify tname) >>= go
     where
       go :: DsMonad m => Info -> m [Type]
+#if MIN_VERSION_template_haskell(2,11,0)
+      go (TyConI (DataD _cx _tname binds _mkind _cons _supers)) = mapM (runQ . varT . toName) binds >>= go'
+      go (TyConI (NewtypeD _cx _tname binds _mkind _con _supers)) = mapM (runQ . varT . toName) binds >>= go'
+#else
       go (TyConI (DataD _cx _tname binds _cons _supers)) = mapM (runQ . varT . toName) binds >>= go'
       go (TyConI (NewtypeD _cx _tname binds _con _supers)) = mapM (runQ . varT . toName) binds >>= go'
+#endif
       go (TyConI (TySynD _tname binds _typ)) = mapM (runQ . varT . toName) binds >>= go'
       go' :: DsMonad m => [Type] -> m [Type]
       go' ps =
