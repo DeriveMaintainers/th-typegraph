@@ -85,6 +85,7 @@ nonPhantom tname =
       go (TyConI (NewtypeD _cx _tname binds _con _supers)) = mapM (runQ . varT . toName) binds >>= go'
 #endif
       go (TyConI (TySynD _tname binds _typ)) = mapM (runQ . varT . toName) binds >>= go'
+      go x = error $ "th-typegraph:nonPhantom - expecting TyConI DataD/TyConI NewtypeD/TyConI TySynD, but found " ++ show x
       go' :: DsMonad m => [Type] -> m [Type]
       go' ps =
           (Set.toList . view (_1 . result)) <$>

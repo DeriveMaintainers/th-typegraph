@@ -88,7 +88,7 @@ doTypeOnce :: HasVisitedMap m => (Type -> m ()) -> Type -> m ()
 doTypeOnce go typ = unvisited typ (go typ)
 
 doApply :: (HasTypeTraversal m, HasTypeParameters m, DsMonad m) => Type -> Type -> m ()
-doApply typ0 (ForallT tvs cxt typ) = doApply typ0 typ
+doApply typ0 (ForallT _tvs _cxt typ) = doApply typ0 typ
 doApply typ0 (VarT name) = doVarT typ0 name
 doApply typ0 (AppT a b) = pushParam b (doApply typ0 a)
 doApply typ0 (ConT tname) = qReify tname >>= doInfo typ0
@@ -138,7 +138,7 @@ doCon typ0 tname subst cct cpos (RecC cname vsts) =
                                  , _fieldName = Just fname
                                  , _fieldType = subst ftype' } in
              doField typ0 subst fld) (zip [1..] vsts)
-doCon typ0 tname subst cct cpos con@(NormalC cname sts) =
+doCon typ0 tname subst cct cpos (NormalC cname sts) =
   mapM_ (\(i, (_, ftype)) ->
              expandType ftype >>= \ftype' ->
              let fld = FieldInfo { _typeName = tname

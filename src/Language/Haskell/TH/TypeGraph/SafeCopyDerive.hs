@@ -292,7 +292,7 @@ internalDeriveSafeCopy' deriveType versionId kindName tyName info = do
 #else
           safeCopyClass args = classP ''SafeCopy args
 #endif
-      in (:[]) <$> instanceD (cxt $ [safeCopyClass [varT $ var] | VarT var <- tyvars'] ++ map return context)
+      in (:[]) <$> instanceD (cxt $ [safeCopyClass [varT $ var] | VarT var <- tyvars'] ++ map return context ++ migrateFromKind ty kindName)
                                        (conT ''SafeCopy `appT` ty)
                                        [ mkPutCopy deriveType cons
                                        , mkGetCopy deriveType (show tyName) cons
@@ -300,6 +300,12 @@ internalDeriveSafeCopy' deriveType versionId kindName tyName info = do
                                        , valD (varP 'kind) (normalB (varE kindName)) []
                                        , funD 'errorTypeName [clause [wildP] (normalB $ litE $ StringL (show tyName)) []]
                                        ]
+    -- This adds Migrate Foo to the superclasses of SafeCopy Foo if
+    -- the kind is extension.  This lets us defer the actual
+    -- implementation of the Migrate instance, which is harmless and
+    -- sometimes useful.
+    migrateFromKind ty name =
+        if name == 'extension then [appT (conT ''Migrate) ty] else []
 
 internalDeriveSafeCopyIndexedType :: DeriveType -> Version a -> Name -> Name -> [Name] -> Q [Dec]
 internalDeriveSafeCopyIndexedType deriveType versionId kindName tyName tyIndex' = do
