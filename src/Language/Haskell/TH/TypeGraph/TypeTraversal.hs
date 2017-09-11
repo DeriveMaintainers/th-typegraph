@@ -75,8 +75,8 @@ class (DsMonad m, HasVisitedMap m) => HasTypeTraversal m where
     -- ^ When a field is encountered this is called with all the
     -- field info - type name, constructor count/position/name,
     -- field count/position/type/maybe name.
-    doVarT :: Type -> Name -> m ()
-    -- ^ Called when a type variable is encountered.
+    doVarT :: Type -> Type -> m ()
+    -- ^ Called when a type variable or type function is encountered.
 
 doType :: HasTypeTraversal m => Type -> m ()
 doType typ = prepType typ >>= doTypeOnce doTypeInternal
@@ -89,7 +89,7 @@ doTypeOnce go typ = unvisited typ (go typ)
 
 doApply :: (HasTypeTraversal m, HasTypeParameters m, DsMonad m) => Type -> Type -> m ()
 doApply typ0 (ForallT _tvs _cxt typ) = doApply typ0 typ
-doApply typ0 (VarT name) = doVarT typ0 name
+doApply typ0 (VarT name) = doVarT typ0 (VarT name)
 doApply typ0 (AppT a b) = pushParam b (doApply typ0 a)
 doApply typ0 (ConT tname) = qReify tname >>= doInfo typ0
 doApply typ0 ListT = do
@@ -122,6 +122,12 @@ doInfo typ0 (TyConI (NewtypeD cx tname binds con supers)) =
 doInfo typ0 (TyConI (DataD _ tname binds cons _supers)) =
     withBindings (\subst -> do mapM_ (uncurry (doCon typ0 tname subst (length cons))) (zip [1..] cons)) binds
 #endif
+-- Encountered a declaration like data family (ProxyType t).  Call
+-- doVarT on the assumption that ProxyType t is a concrete type.  I'm
+-- not sure if this is the best possible implementation, but its
+-- better than what we have now.
+doInfo typ0 i@(FamilyI (FamilyD DataFam typ binds mk) insts) =
+  withBindings (\subst -> doVarT typ0 (subst (foldl AppT (ConT typ) (fmap (VarT . toName) binds)))) binds
 doInfo _ info = error $ "Unexpected info: " ++ pprint1 info ++ "\n\t" ++ show info
 
 doCon :: (HasTypeParameters m, HasTypeTraversal m) => Type -> Name -> (Type -> Type) -> Int -> Int -> Con -> m ()

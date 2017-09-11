@@ -292,7 +292,7 @@ internalDeriveSafeCopy' deriveType versionId kindName tyName info = do
 #else
           safeCopyClass args = classP ''SafeCopy args
 #endif
-      in (:[]) <$> instanceD (cxt $ [safeCopyClass [varT $ var] | VarT var <- tyvars'] ++ map return context ++ migrateFromKind ty kindName)
+      in (:[]) <$> instanceD (cxt $ [safeCopyClass [pure typ] | typ <- tyvars'] ++ map return context ++ migrateFromKind ty kindName)
                                        (conT ''SafeCopy `appT` ty)
                                        [ mkPutCopy deriveType cons
                                        , mkGetCopy deriveType (show tyName) cons

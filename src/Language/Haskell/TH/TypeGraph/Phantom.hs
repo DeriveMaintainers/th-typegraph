@@ -70,7 +70,7 @@ instance DsMonad m => HasTypeTraversal (RWST R () S m) where
     doListT = \typ0 etyp -> message 1 ("doListT " ++ pprint1 typ0) >> doType etyp
     doTupleT = \_ etyp _ -> message 1 ("doTupleT " ++ show etyp) >> doType etyp
     doField = \_t0 _ fi@(FieldInfo {..})  -> message 1 ("doField " ++ show fi) >> doType _fieldType
-    doVarT = \_ name -> message 1 ("doVarT " ++ show name) >> result %= Set.insert (VarT name)
+    doVarT = \_ typ -> message 1 ("doVarT " ++ pprint1 typ) >> result %= Set.insert typ
 
 nonPhantom :: DsMonad m => Name -> m [Type]
 nonPhantom tname =
