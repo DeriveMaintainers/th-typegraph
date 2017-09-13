@@ -116,10 +116,10 @@ unVersion v = read (takeWhile (/= '}') (drop 21 (show v)))
 --   Note that you may use 'deriveSafeCopySimple' with one
 --   version of your data type and 'deriveSafeCopy' in another
 --   version without any problems.
-deriveSafeCopy :: Version a -> Name -> Name -> Q [Dec]
+deriveSafeCopy :: Version a -> Name -> TypeQ -> Q [Dec]
 deriveSafeCopy = internalDeriveSafeCopy Normal
 
-deriveSafeCopyIndexedType :: Version a -> Name -> Name -> [Name] -> Q [Dec]
+deriveSafeCopyIndexedType :: Version a -> Name -> Name -> [TypeQ] -> Q [Dec]
 deriveSafeCopyIndexedType = internalDeriveSafeCopyIndexedType Normal
 
 -- | Derive an instance of 'SafeCopy'.  The instance derived by
@@ -171,10 +171,10 @@ deriveSafeCopyIndexedType = internalDeriveSafeCopyIndexedType Normal
 --   Note that you may use 'deriveSafeCopy' with one version of
 --   your data type and 'deriveSafeCopySimple' in another version
 --   without any problems.
-deriveSafeCopySimple :: Version a -> Name -> Name -> Q [Dec]
+deriveSafeCopySimple :: Version a -> Name -> TypeQ -> Q [Dec]
 deriveSafeCopySimple = internalDeriveSafeCopy Simple
 
-deriveSafeCopySimpleIndexedType :: Version a -> Name -> Name -> [Name] -> Q [Dec]
+deriveSafeCopySimpleIndexedType :: Version a -> Name -> Name -> [TypeQ] -> Q [Dec]
 deriveSafeCopySimpleIndexedType = internalDeriveSafeCopyIndexedType Simple
 
 -- | Derive an instance of 'SafeCopy'.  The instance derived by
@@ -221,10 +221,10 @@ deriveSafeCopySimpleIndexedType = internalDeriveSafeCopyIndexedType Simple
 --   Note that you may use 'deriveSafeCopy' with one version of
 --   your data type and 'deriveSafeCopyHappstackData' in another version
 --   without any problems.
-deriveSafeCopyHappstackData :: Version a -> Name -> Name -> Q [Dec]
+deriveSafeCopyHappstackData :: Version a -> Name -> TypeQ -> Q [Dec]
 deriveSafeCopyHappstackData = internalDeriveSafeCopy HappstackData
 
-deriveSafeCopyHappstackDataIndexedType :: Version a -> Name -> Name -> [Name] -> Q [Dec]
+deriveSafeCopyHappstackDataIndexedType :: Version a -> Name -> Name -> [TypeQ] -> Q [Dec]
 deriveSafeCopyHappstackDataIndexedType = internalDeriveSafeCopyIndexedType HappstackData
 
 data DeriveType = Normal | Simple | HappstackData
@@ -239,20 +239,27 @@ tyVarName (PlainTV n) = n
 tyVarName (KindedTV n _) = n
 #endif
 
-internalDeriveSafeCopy :: DeriveType -> Version a -> Name -> Name -> Q [Dec]
-internalDeriveSafeCopy deriveType versionId kindName tyName = do
-  info <- reify tyName
-  internalDeriveSafeCopy' deriveType versionId kindName tyName info
+internalDeriveSafeCopy :: DeriveType -> Version a -> Name -> TypeQ -> Q [Dec]
+internalDeriveSafeCopy deriveType versionId kindName egValueType = do
+  egValueType' <- egValueType
+  case egValueType' of
+    ConT tyName -> do
+      info <- reify tyName
+      internalDeriveSafeCopy' deriveType versionId kindName egValueType' info
+    AppT (ConT egValueTypeName) (ConT _) -> do
+      egValueTypeInfo <- reify egValueTypeName
+      internalDeriveSafeCopy' deriveType versionId kindName egValueType' egValueTypeInfo
+    typ -> error ("deriveSafeCopy - no support for type: " ++ pprint typ)
 
-internalDeriveSafeCopy' :: DeriveType -> Version a -> Name -> Name -> Info -> Q [Dec]
-internalDeriveSafeCopy' deriveType versionId kindName tyName info = do
+internalDeriveSafeCopy' :: DeriveType -> Version a -> Name -> Type -> Info -> Q [Dec]
+internalDeriveSafeCopy' deriveType versionId kindName typ info = do
   case info of
 #if MIN_VERSION_template_haskell(2,11,0)
     TyConI (DataD context _name tyvars _kind cons _derivs)
 #else
     TyConI (DataD context _name tyvars cons _derivs)
 #endif
-      | length cons > 255 -> fail $ "Can't derive SafeCopy instance for: " ++ show tyName ++
+      | length cons > 255 -> fail $ "Can't derive SafeCopy instance for: " ++ pprint typ ++
                                     ". The datatype must have less than 256 constructors."
       | otherwise         -> worker context tyvars (zip [0..] cons)
 
@@ -271,21 +278,23 @@ internalDeriveSafeCopy' deriveType versionId kindName tyName info = do
 #else
           DataInstD context _name ty cons _derivs ->
 #endif
-              worker' (foldl appT (conT tyName) (map return ty)) context [] (zip [0..] cons)
+              worker' (pure typ) context [] (zip [0..] cons)
 
 #if MIN_VERSION_template_haskell(2,11,0)
           NewtypeInstD context _name ty _kind con _derivs ->
 #else
           NewtypeInstD context _name ty con _derivs ->
 #endif
-              worker' (foldl appT (conT tyName) (map return ty)) context [] [(0, con)]
-          _ -> fail $ "Can't derive SafeCopy instance for: " ++ show (tyName, inst)
+              worker' (pure typ) context [] [(0, con)]
+          _ -> fail $ "Can't derive SafeCopy instance for: " ++ show (typ, inst)
       return $ concat decs
-    _ -> fail $ "Can't derive SafeCopy instance for: " ++ show (tyName, info)
+    _ -> fail $ "Can't derive SafeCopy instance for: " ++ show (typ, info)
   where
-    worker = worker' (conT tyName)
+    worker = worker' (pure typ)
     worker' tyBase context tyvars cons =
-      nonPhantom tyName >>= \tyvars' ->
+      (case typ of
+         ConT tyName -> nonPhantom tyName -- Only works on type names right now
+         _ -> pure (map (VarT . tyVarName) tyvars)) >>= \tyvars' ->
       let ty = foldl appT tyBase [ varT $ tyVarName var | var <- tyvars ]
 #if MIN_VERSION_template_haskell(2,10,0)
           safeCopyClass args = foldl appT (conT ''SafeCopy) args
@@ -295,10 +304,10 @@ internalDeriveSafeCopy' deriveType versionId kindName tyName info = do
       in (:[]) <$> instanceD (cxt $ [safeCopyClass [pure typ] | typ <- tyvars'] ++ map return context ++ migrateFromKind ty kindName)
                                        (conT ''SafeCopy `appT` ty)
                                        [ mkPutCopy deriveType cons
-                                       , mkGetCopy deriveType (show tyName) cons
+                                       , mkGetCopy deriveType typ cons
                                        , valD (varP 'version) (normalB $ litE $ integerL $ fromIntegral $ unVersion versionId) []
                                        , valD (varP 'kind) (normalB (varE kindName)) []
-                                       , funD 'errorTypeName [clause [wildP] (normalB $ litE $ StringL (show tyName)) []]
+                                       , funD 'errorTypeName [clause [wildP] (normalB $ litE $ StringL (pprint typ)) []]
                                        ]
     -- This adds Migrate Foo to the superclasses of SafeCopy Foo if
     -- the kind is extension.  This lets us defer the actual
@@ -307,14 +316,15 @@ internalDeriveSafeCopy' deriveType versionId kindName tyName info = do
     migrateFromKind ty name =
         if name == 'extension then [appT (conT ''Migrate) ty] else []
 
-internalDeriveSafeCopyIndexedType :: DeriveType -> Version a -> Name -> Name -> [Name] -> Q [Dec]
+internalDeriveSafeCopyIndexedType :: DeriveType -> Version a -> Name -> Name -> [TypeQ] -> Q [Dec]
 internalDeriveSafeCopyIndexedType deriveType versionId kindName tyName tyIndex' = do
   info <- reify tyName
   internalDeriveSafeCopyIndexedType' deriveType versionId kindName tyName tyIndex' info
 
-internalDeriveSafeCopyIndexedType' :: DeriveType -> Version a -> Name -> Name -> [Name] -> Info -> Q [Dec]
+internalDeriveSafeCopyIndexedType' :: DeriveType -> Version a -> Name -> Name -> [TypeQ] -> Info -> Q [Dec]
 internalDeriveSafeCopyIndexedType' deriveType versionId kindName tyName tyIndex' info = do
-  tyIndex <- mapM conT tyIndex'
+  tyIndex <- sequence tyIndex'
+  typ <- foldl appT (conT tyName) tyIndex'
   case info of
     FamilyI _ insts -> do
       decs <- forM insts $ \inst ->
@@ -325,7 +335,7 @@ internalDeriveSafeCopyIndexedType' deriveType versionId kindName tyName tyIndex'
           DataInstD context _name ty cons _derivs
 #endif
             | ty == tyIndex ->
-              worker' (foldl appT (conT tyName) (map return ty)) context [] (zip [0..] cons)
+              worker' typ (foldl appT (conT tyName) (map return ty)) context [] (zip [0..] cons)
             | otherwise ->
               return []
 
@@ -335,15 +345,14 @@ internalDeriveSafeCopyIndexedType' deriveType versionId kindName tyName tyIndex'
           NewtypeInstD context _name ty con _derivs
 #endif
             | ty == tyIndex ->
-              worker' (foldl appT (conT tyName) (map return ty)) context [] [(0, con)]
+              worker' typ (foldl appT (conT tyName) (map return ty)) context [] [(0, con)]
             | otherwise ->
               return []
           _ -> fail $ "Can't derive SafeCopy instance for: " ++ show (tyName, inst)
       return $ concat decs
     _ -> fail $ "Can't derive SafeCopy instance for: " ++ show (tyName, info)
   where
-    typeNameStr = unwords $ map show (tyName:tyIndex')
-    worker' tyBase context tyvars cons =
+    worker' typ tyBase context tyvars cons =
       let ty = foldl appT tyBase [ varT $ tyVarName var | var <- tyvars ]
 #if MIN_VERSION_template_haskell(2,10,0)
           safeCopyClass args = foldl appT (conT ''SafeCopy) args
@@ -353,10 +362,10 @@ internalDeriveSafeCopyIndexedType' deriveType versionId kindName tyName tyIndex'
       in (:[]) <$> instanceD (cxt $ [safeCopyClass [varT $ tyVarName var] | var <- tyvars] ++ map return context)
                                        (conT ''SafeCopy `appT` ty)
                                        [ mkPutCopy deriveType cons
-                                       , mkGetCopy deriveType typeNameStr cons
+                                       , mkGetCopy deriveType typ cons
                                        , valD (varP 'version) (normalB $ litE $ integerL $ fromIntegral $ unVersion versionId) []
                                        , valD (varP 'kind) (normalB (varE kindName)) []
-                                       , funD 'errorTypeName [clause [wildP] (normalB $ litE $ StringL typeNameStr) []]
+                                       , funD 'errorTypeName [clause [wildP] (normalB $ litE $ StringL (pprint typ)) []]
                                        ]
 
 mkPutCopy :: DeriveType -> [(Integer, Con)] -> DecQ
@@ -376,11 +385,11 @@ mkPutCopy deriveType cons = funD 'putCopy $ map mkPutClause cons
                                    [ noBindS $ varE 'return `appE` tupE [] ])
                clause [putClause] (normalB putCopyBody) []
 
-mkGetCopy :: DeriveType -> String -> [(Integer, Con)] -> DecQ
-mkGetCopy deriveType tyName cons = valD (varP 'getCopy) (normalB $ varE 'contain `appE` mkLabel) []
+mkGetCopy :: DeriveType -> Type -> [(Integer, Con)] -> DecQ
+mkGetCopy deriveType typ cons = valD (varP 'getCopy) (normalB $ varE 'contain `appE` mkLabel) []
     where
       mkLabel = varE 'label `appE` litE (stringL labelString) `appE` getCopyBody
-      labelString = tyName ++ ":"
+      labelString = pprint typ ++ ":"
       getCopyBody
           = case cons of
               [(_, con)] | not (forceTag deriveType) -> mkGetBody con
@@ -404,7 +413,7 @@ mkGetCopy deriveType tyName cons = valD (varP 'getCopy) (normalB $ varE 'contain
             tagStr = varE 'show `appE` varE tagVar
             str1 = "Could not identify tag \""
             str2 = concat [ "\" for type "
-                          , show tyName
+                          , pprint typ
                           , " that has only "
                           , show (length cons)
                           , " constructors.  Maybe your data is corrupted?" ]
