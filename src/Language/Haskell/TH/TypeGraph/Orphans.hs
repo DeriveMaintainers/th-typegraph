@@ -87,7 +87,6 @@ instance FromJSONKey UserId
 instance ToJSONKey UserId
 #endif
 
-deriving instance Serialize UserId
 deriving instance Serialize Loc
 
 $(deriveLift ''UserId)
