@@ -127,11 +127,11 @@ doInfo typ0 (TyConI (DataD _ tname binds cons _supers)) =
 -- not sure if this is the best possible implementation, but its
 -- better than what we have now.
 #if MIN_VERSION_template_haskell(2,11,0)
--- Implement me
+doInfo typ0 (FamilyI (DataFamilyD typ binds _mk) _insts) =
 #else
-doInfo typ0 i@(FamilyI (FamilyD DataFam typ binds mk) insts) =
-  withBindings (\subst -> doVarT typ0 (subst (foldl AppT (ConT typ) (fmap (VarT . toName) binds)))) binds
+doInfo typ0 (FamilyI (FamilyD DataFam typ binds _mk) _insts) =
 #endif
+  withBindings (\subst -> doVarT typ0 (subst (foldl AppT (ConT typ) (fmap (VarT . toName) binds)))) binds
 doInfo _ info = error $ "Unexpected info: " ++ pprint1 info ++ "\n\t" ++ show info
 
 doCon :: (HasTypeParameters m, HasTypeTraversal m) => Type -> Name -> (Type -> Type) -> Int -> Int -> Con -> m ()
