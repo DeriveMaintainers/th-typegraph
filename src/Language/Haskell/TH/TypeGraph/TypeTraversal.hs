@@ -126,8 +126,12 @@ doInfo typ0 (TyConI (DataD _ tname binds cons _supers)) =
 -- doVarT on the assumption that ProxyType t is a concrete type.  I'm
 -- not sure if this is the best possible implementation, but its
 -- better than what we have now.
+#if MIN_VERSION_template_haskell(2,11,0)
+-- Implement me
+#else
 doInfo typ0 i@(FamilyI (FamilyD DataFam typ binds mk) insts) =
   withBindings (\subst -> doVarT typ0 (subst (foldl AppT (ConT typ) (fmap (VarT . toName) binds)))) binds
+#endif
 doInfo _ info = error $ "Unexpected info: " ++ pprint1 info ++ "\n\t" ++ show info
 
 doCon :: (HasTypeParameters m, HasTypeTraversal m) => Type -> Name -> (Type -> Type) -> Int -> Int -> Con -> m ()
