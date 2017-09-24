@@ -8,6 +8,7 @@
 module Language.Haskell.TH.TypeGraph.SafeCopyDerive where
 
 import Language.Haskell.TH.TypeGraph.Phantom (nonPhantom)
+import Language.Haskell.TH.TypeGraph.TypeTraversal (pprint1)
 import Data.Serialize (getWord8, putWord8, label)
 import Data.SafeCopy
 
@@ -239,9 +240,25 @@ tyVarName (PlainTV n) = n
 tyVarName (KindedTV n _) = n
 #endif
 
+-- | Turn type applications into a type parameter list
+decomposeType :: Type -> [Type]
+decomposeType t0 = go t0 []
+          where go (AppT t1 t2) ts = go t1 (t2 : ts)
+                go t ts = t : ts
+
+-- | Turn a type parameter list into type applications
+composeType :: [Type] -> Type
+composeType ts = foldl1 AppT ts
+
 internalDeriveSafeCopy :: DeriveType -> Version a -> Name -> TypeQ -> Q [Dec]
 internalDeriveSafeCopy deriveType versionId kindName egValueType = do
   egValueType' <- egValueType
+#if 1
+  case decomposeType egValueType' of
+    (ConT tyName : _) -> do
+      info <- reify tyName
+      internalDeriveSafeCopy' deriveType versionId kindName egValueType' info
+#else
   case egValueType' of
     ConT tyName -> do
       info <- reify tyName
@@ -249,6 +266,7 @@ internalDeriveSafeCopy deriveType versionId kindName egValueType = do
     AppT (ConT egValueTypeName) (ConT _) -> do
       egValueTypeInfo <- reify egValueTypeName
       internalDeriveSafeCopy' deriveType versionId kindName egValueType' egValueTypeInfo
+#endif
     typ -> error ("deriveSafeCopy - no support for type: " ++ pprint typ)
 
 internalDeriveSafeCopy' :: DeriveType -> Version a -> Name -> Type -> Info -> Q [Dec]
@@ -274,18 +292,22 @@ internalDeriveSafeCopy' deriveType versionId kindName typ info = do
       decs <- forM insts $ \inst ->
         case inst of
 #if MIN_VERSION_template_haskell(2,11,0)
-          DataInstD context _name ty _kind cons _derivs ->
+          DataInstD context name ty _kind cons _derivs ->
 #else
-          DataInstD context _name ty cons _derivs ->
+          DataInstD context name ty cons _derivs ->
 #endif
-              worker' (pure typ) context [] (zip [0..] cons)
+            if typ == composeType (ConT name : ty)
+            then (worker' (pure typ) context [] (zip [0..] cons))
+            else return []
 
 #if MIN_VERSION_template_haskell(2,11,0)
-          NewtypeInstD context _name ty _kind con _derivs ->
+          NewtypeInstD context name ty _kind con _derivs ->
 #else
-          NewtypeInstD context _name ty con _derivs ->
+          NewtypeInstD context name ty con _derivs ->
 #endif
-              worker' (pure typ) context [] [(0, con)]
+            if typ == composeType (ConT name : ty)
+            then worker' (pure typ) context [] [(0, con)]
+            else return []
           _ -> fail $ "Can't derive SafeCopy instance for: " ++ show (typ, inst)
       return $ concat decs
     _ -> fail $ "Can't derive SafeCopy instance for: " ++ show (typ, info)
@@ -307,7 +329,7 @@ internalDeriveSafeCopy' deriveType versionId kindName typ info = do
                                        , mkGetCopy deriveType typ cons
                                        , valD (varP 'version) (normalB $ litE $ integerL $ fromIntegral $ unVersion versionId) []
                                        , valD (varP 'kind) (normalB (varE kindName)) []
-                                       , funD 'errorTypeName [clause [wildP] (normalB $ litE $ StringL (pprint typ)) []]
+                                       , funD 'errorTypeName [clause [wildP] (normalB $ litE $ StringL (pprint1 typ)) []]
                                        ]
     -- This adds Migrate Foo to the superclasses of SafeCopy Foo if
     -- the kind is extension.  This lets us defer the actual
@@ -365,7 +387,7 @@ internalDeriveSafeCopyIndexedType' deriveType versionId kindName tyName tyIndex'
                                        , mkGetCopy deriveType typ cons
                                        , valD (varP 'version) (normalB $ litE $ integerL $ fromIntegral $ unVersion versionId) []
                                        , valD (varP 'kind) (normalB (varE kindName)) []
-                                       , funD 'errorTypeName [clause [wildP] (normalB $ litE $ StringL (pprint typ)) []]
+                                       , funD 'errorTypeName [clause [wildP] (normalB $ litE $ StringL (pprint1 typ)) []]
                                        ]
 
 mkPutCopy :: DeriveType -> [(Integer, Con)] -> DecQ
@@ -389,7 +411,7 @@ mkGetCopy :: DeriveType -> Type -> [(Integer, Con)] -> DecQ
 mkGetCopy deriveType typ cons = valD (varP 'getCopy) (normalB $ varE 'contain `appE` mkLabel) []
     where
       mkLabel = varE 'label `appE` litE (stringL labelString) `appE` getCopyBody
-      labelString = pprint typ ++ ":"
+      labelString = pprint1 typ ++ ":"
       getCopyBody
           = case cons of
               [(_, con)] | not (forceTag deriveType) -> mkGetBody con
