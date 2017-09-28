@@ -62,10 +62,11 @@ deriveSerialize typq = do
                                          clause [conPat fnames (tag, con)]
                                                 (normalB (conExp cons tag conName fnames))
                                                 []) cons)
-              getFun = funD 'get [clause [] (normalB [|$(if length cons > 1
-                                                         then [|getWord8|]
-                                                         else [|return 0|]) >>= \i ->
-                                                       $(caseE [|i|] (map conGet cons))|]) []]
+              getFun = funD 'get [clause [] (normalB (case cons of
+                                                        [(_, con)] -> conGet (toName con) 1
+                                                        _ -> [|getWord8 >>= \i -> $(caseE [|i|] (map conMatch cons ++ [errorCase]))|]
+                                                     )) []]
+              errorCase = newName "n" >>= \n -> match (varP n) (normalB [|error ("deriveSerialize - unexpected tag: " ++ show $(varE n))|]) []
           constraints <- toList <$> deriveConstraints 0 ''Serialize tname vals'
           instanceD
             (pure constraints)
@@ -79,11 +80,14 @@ deriveSerialize typq = do
       conExp cons tag cname fnames =
           doSeq $ (if length cons > 1 then [ [|putWord8 $(lift tag)|] ] else []) ++
                   map (\fname -> [|put $(varE fname)|]) fnames
-      conGet :: (Int, Con) -> MatchQ
-      conGet (n, ForallC _ _ con) = conGet (n, con)
-      conGet (n, NormalC name sts) =     match (litP (integerL (fromIntegral n))) (normalB $ doApp $ ([|pure $(conE name)|] : map (const [|get|]) sts)) []
-      conGet (n, RecC name vsts) =       match (litP (integerL (fromIntegral n))) (normalB $ doApp $ ([|pure $(conE name)|] : map (const [|get|]) vsts)) []
-      conGet (n, InfixC lhs name rhs) =  match (litP (integerL (fromIntegral n))) (normalB $ doApp $ ([|pure $(conE name)|] : map (const [|get|]) [lhs, rhs])) []
+      conMatch :: (Int, Con) -> MatchQ
+      conMatch (n, ForallC _ _ con) = conMatch (n, con)
+      conMatch (n, NormalC name sts) =     match (litP (integerL (fromIntegral n))) (normalB $ conGet name (length sts)) []
+      conMatch (n, RecC name vsts) =       match (litP (integerL (fromIntegral n))) (normalB $ conGet name (length vsts)) []
+      conMatch (n, InfixC lhs name rhs) =  match (litP (integerL (fromIntegral n))) (normalB $ conGet name 2) []
+
+      conGet :: Name -> Int -> ExpQ
+      conGet name arity = doApp ([|pure $(conE name)|] : replicate arity [|get|])
 
       doSeq es = foldl1 (\e1 e2 -> [|$e1 >> $e2|]) es
       doApp es = foldl1 (\e1 e2 -> [|$e1 <*> $e2|]) es
