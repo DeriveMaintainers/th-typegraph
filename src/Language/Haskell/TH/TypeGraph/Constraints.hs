@@ -8,6 +8,7 @@
 
 module Language.Haskell.TH.TypeGraph.Constraints
     ( deriveConstraints
+    , withBindings
     ) where
 
 import Control.Monad (MonadPlus, msum, when)
@@ -69,19 +70,32 @@ deriveConstraints verbosity0 constraint tyConName varTysExp = do
       goInfo :: [Type] -> Info -> RWST R (Set Pred) (Set Type) Q ()
       goInfo vals (TyConI (TySynD _tname vars typ)) =
           withBindings vals vars (\subst -> goType (subst typ))
+#if MIN_VERSION_template_haskell(2,11,0)
+      goInfo vals (TyConI (DataD _cxt _tname vars _ cons _supers)) =
+#else
       goInfo vals (TyConI (DataD _cxt _tname vars cons _supers)) =
+#endif
           withBindings vals vars (\subst -> mapM_ (goCon subst) cons)
+#if MIN_VERSION_template_haskell(2,11,0)
+      goInfo vals (TyConI (NewtypeD cx tname vars _ con supers)) =
+#else
       goInfo vals (TyConI (NewtypeD cx tname vars con supers)) =
+#endif
           goInfo vals (TyConI (DataD cx tname vars [con] supers))
       goInfo _vals (PrimTyConI _ _ _) = return ()
-      goInfo vals (FamilyI (FamilyD DataFam famname vars _mk) _insts) = do
-        withBindings vals vars (\subst -> do let typ = subst (compose (ConT famname : fmap (VarT . toName) vars))
-                                             params <- paramNames <$> ask
-                                             when (any (`Set.member` params) (gFind typ :: [Name]))
-                                                  (tell (Set.singleton (AppT (ConT constraint) typ))))
+#if MIN_VERSION_template_haskell(2,11,0)
+      goInfo vals (FamilyI (DataFamilyD famname vars _mk) _insts) =
+#else
+      goInfo vals (FamilyI (FamilyD DataFam famname vars _mk) _insts) =
+#endif
+        withBindings vals vars
+          (\subst -> do let typ = subst (compose (ConT famname : fmap (VarT . toName) vars))
+                        params <- paramNames <$> ask
+                        when (any (`Set.member` params) (gFind typ :: [Name]))
+                             (tell (Set.singleton (AppT (ConT constraint) typ))))
       goInfo _vals info = error ("deriveConstraints info=" ++ show info)
 
-      -- goCon :: Data a => Name -> (a -> a) -> Int -> Int -> Con -> WriterT (Set Pred) Q ()
+      goCon :: (Type -> Type) -> Con -> RWST R (Set Pred) (Set Type) Q ()
       goCon subst (ForallC _ _ con) =
           goCon subst con
       goCon subst (NormalC _cname sts) =
@@ -99,16 +113,21 @@ deriveConstraints verbosity0 constraint tyConName varTysExp = do
 -- appearing in a Dec) and the current stack of type parameters
 -- applied by AppT.  Builds a function that expands a type using those
 -- bindings and pass it to an action.
-withBindings :: (Monad m, Data a) => [Type] -> [TyVarBndr] -> ((a -> a) -> m ()) -> m ()
+withBindings :: (Monad m, Data a) => [Type] -> [TyVarBndr] -> ((a -> a) -> m r) -> m r
 withBindings vals vars action = do
-  when (length vals < length vars)
-    (error $ "doInfo - arity mismatch:\n\tvars=" ++ show vars ++
-             "\n\tparams=" ++ show vals)
+  -- when (length vals < length vars)
+  --   (error $ "doInfo - arity mismatch:\n\tvars=" ++ show vars ++
+  --            "\n\tparams=" ++ show vals)
   let subst :: forall a. Data a => a -> a
       subst = substG bindings
-      bindings = Map.fromList (zip (fmap toName vars) (vals :: [Type]))
+      -- Make the type monomorphic by using the variable list to
+      -- extend the list of values as necessary with self bindings.
+      -- This prevents the arity mismatch error commented out above.
+      vals' = vals ++ map (VarT . toName) (drop (length vals) vars)
+      bindings = Map.fromList (zip (fmap toName vars) vals')
   action subst
     where
+      -- Build a generic substitution function
       substG :: forall a. Data a => Map Name Type -> a -> a
       substG bindings typ = everywhere (mkT (subst1 bindings)) typ
 

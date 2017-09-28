@@ -27,6 +27,7 @@ library
     Language.Haskell.TH.TypeGraph.Orphans
     Language.Haskell.TH.TypeGraph.Phantom
     Language.Haskell.TH.TypeGraph.SafeCopyDerive
+    Language.Haskell.TH.TypeGraph.Serialize
     Language.Haskell.TH.TypeGraph.TypeTraversal
     Language.Haskell.TH.TypeGraph.WebRoutesTH
   build-depends:
