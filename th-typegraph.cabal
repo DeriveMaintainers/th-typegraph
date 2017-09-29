@@ -32,10 +32,22 @@ library
     Language.Haskell.TH.TypeGraph.WebRoutesTH
     Language.Haskell.TH.TypeGraph.Aeson
   other-modules:
-    Language.Haskell.TH.TypeGraph.AesonEncodeBuilder
-    Language.Haskell.TH.TypeGraph.AesonEncodeFunctions
-    Language.Haskell.TH.TypeGraph.AesonTypesClass
-    Language.Haskell.TH.TypeGraph.AesonTypesInternal
+    Data.Aeson
+    Data.Aeson.Parser.Time
+    Data.Aeson.Parser.Internal
+    Data.Aeson.Internal.Time
+    Data.Aeson.Encode
+    Data.Aeson.Functions
+    Data.Aeson.Parser
+    Data.Aeson.Encode.Functions
+    Data.Aeson.Encode.Builder
+    Data.Aeson.Types.Instances
+    Data.Aeson.Types.Generic
+    Data.Aeson.Types.Class
+    Data.Aeson.Types.Internal
+    Data.Aeson.Internal
+    Data.Aeson.Types
+    Data.Aeson.TH
   build-depends:
     aeson,
     base >= 4.8 && < 5,
@@ -65,7 +77,12 @@ library
     semigroups,
     deepseq,
     hashable,
-    fail
+    fail,
+    dlist,
+    attoparsec,
+    tagged,
+    ghc-prim,
+    transformers
   include-dirs: include
 
 test-suite th-typegraph-tests

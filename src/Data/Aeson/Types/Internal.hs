@@ -20,7 +20,7 @@
 --
 -- Types for working with JSON data.
 
-module Language.Haskell.TH.TypeGraph.AesonTypesInternal
+module Data.Aeson.Types.Internal
     (
     -- * Core JSON types
       Value(..)

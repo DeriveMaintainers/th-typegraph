@@ -11,7 +11,7 @@
 --
 -- Efficiently serialize a JSON value using the UTF-8 encoding.
 
-module Language.Haskell.TH.TypeGraph.AesonEncodeBuilder
+module Data.Aeson.Encode.Builder
     (
       encodeToBuilder
     , null_
@@ -36,7 +36,7 @@ module Language.Haskell.TH.TypeGraph.AesonEncodeBuilder
     ) where
 
 import Data.Aeson.Internal.Time
-import Language.Haskell.TH.TypeGraph.AesonTypesInternal (Encoding(..), Value(..))
+import Data.Aeson.Types.Internal (Encoding(..), Value(..))
 import Data.ByteString.Builder as B
 import Data.ByteString.Builder.Prim as BP
 import Data.ByteString.Builder.Scientific (scientificBuilder)

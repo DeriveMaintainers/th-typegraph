@@ -11,7 +11,7 @@
 --
 -- Types for working with JSON data.
 
-module Language.Haskell.TH.TypeGraph.AesonTypesClass
+module Data.Aeson.Types.Class
     (
     -- * Core JSON classes
       FromJSON(..)
@@ -29,10 +29,10 @@ module Language.Haskell.TH.TypeGraph.AesonTypesClass
     , typeMismatch
     ) where
 
-import Language.Haskell.TH.TypeGraph.AesonTypesInternal
+import Data.Aeson.Types.Internal
 import Data.Text (Text)
 import GHC.Generics (Generic, Rep, from, to)
-import qualified Language.Haskell.TH.TypeGraph.AesonEncodeBuilder as E
+import qualified Data.Aeson.Encode.Builder as E
 
 -- | Class of generic representation types ('Rep') that can be converted to
 -- JSON.

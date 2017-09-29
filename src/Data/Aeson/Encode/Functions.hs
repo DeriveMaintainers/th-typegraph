@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-module Language.Haskell.TH.TypeGraph.AesonEncodeFunctions
+module Data.Aeson.Encode.Functions
     (
       brackets
     , builder
@@ -11,9 +11,9 @@ module Language.Haskell.TH.TypeGraph.AesonEncodeFunctions
     , pairs
     ) where
 
-import Language.Haskell.TH.TypeGraph.AesonEncodeBuilder
-import Language.Haskell.TH.TypeGraph.AesonTypesClass
-import Language.Haskell.TH.TypeGraph.AesonTypesInternal
+import Data.Aeson.Encode.Builder
+import Data.Aeson.Types.Class
+import Data.Aeson.Types.Internal
 import Data.ByteString.Builder (Builder, char7)
 import Data.ByteString.Builder.Prim (primBounded)
 import Data.Monoid ((<>))

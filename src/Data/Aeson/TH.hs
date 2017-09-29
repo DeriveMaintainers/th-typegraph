@@ -81,7 +81,7 @@ $('deriveJSON' 'defaultOptions' ''(,,,))
 
 -}
 
-module Language.Haskell.TH.TypeGraph.Aeson
+module Data.Aeson.TH
     ( -- * Encoding configuration
       Options(..), SumEncoding(..), defaultOptions, defaultTaggedObject
 
@@ -97,8 +97,11 @@ module Language.Haskell.TH.TypeGraph.Aeson
     ) where
 
 import Control.Applicative ( pure, (<$>), (<*>) )
-import Data.Aeson hiding (fromEncoding, object)
-import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints)
+import Data.Aeson ( toJSON, Object, (.=), (.:), (.:?)
+                  , ToJSON, toEncoding, toJSON
+                  , FromJSON, parseJSON
+                  )
+import Data.Aeson.Constraints (deriveConstraints)
 import Data.Aeson.Types ( Value(..), Parser
                         , Options(..)
                         , SumEncoding(..)
@@ -146,6 +149,7 @@ import qualified Data.Map as M ( fromList, findWithDefault )
 import qualified Data.Text as T ( Text, pack, unpack )
 import qualified Data.Vector as V ( unsafeIndex, null, length, create, fromList )
 import qualified Data.Vector.Mutable as VM ( unsafeNew, unsafeWrite )
+
 
 --------------------------------------------------------------------------------
 -- Convenience
