@@ -101,7 +101,7 @@ import Data.Aeson ( toJSON, Object, (.=), (.:), (.:?)
                   , ToJSON, toEncoding, toJSON
                   , FromJSON, parseJSON
                   )
-import Data.Aeson.Constraints (deriveConstraints)
+import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints)
 import Data.Aeson.Types ( Value(..), Parser
                         , Options(..)
                         , SumEncoding(..)
