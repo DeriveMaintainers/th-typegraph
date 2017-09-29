@@ -15,12 +15,12 @@ import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints, withBinding
 import Language.Haskell.TH.TypeGraph.TypeTraversal (toName)
 
 deriveSerialize :: TypeQ -> Q [Dec]
-deriveSerialize typq = do
-  typq >>= goType
-    where
-      goType :: Type -> Q [Dec]
-      goType typ0 = (: []) <$> goApply typ0 (decompose typ0)
+deriveSerialize typq = typq >>= deriveSerialize'
 
+deriveSerialize' :: Type -> Q [Dec]
+deriveSerialize' typ0 = do
+  (: []) <$> goApply typ0 (decompose typ0)
+    where
       goApply :: Type -> [Type] -> Q Dec
       goApply typ0 (ConT tname : vals) =
           reify tname >>= goInfo typ0 tname vals
@@ -54,9 +54,9 @@ deriveSerialize typq = do
                               goClauses tname vals' vars cons subst
                           [] ->
                               let typ = subst (compose (ConT famname : fmap (VarT . toName) vars)) in
-                              error $ "Data family instance could not be reified:\n " ++ pprint typ)
+                              error $ "deriveSerialize " ++ pprint typ0 ++ "\n    Data family instance could not be reified: " ++ pprint typ)
       goInfo _typ0 _tname _vals info =
-          error ("deriveSerialize - unexpected info: " ++ show info)
+          error $ "deriveSerialize " ++ pprint typ0 ++ "\n    unexpected info: " ++ show info
 
       goClauses :: Name -> [Type] -> [TyVarBndr] -> [Con] -> (Type -> Type) -> Q Dec
       goClauses tname vals vars cons subst = do
