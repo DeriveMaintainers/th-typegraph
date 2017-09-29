@@ -66,6 +66,7 @@ library
     deepseq,
     hashable,
     fail
+  include-dirs: include
 
 test-suite th-typegraph-tests
   default-language: Haskell2010
