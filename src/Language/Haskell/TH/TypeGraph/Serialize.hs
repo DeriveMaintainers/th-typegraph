@@ -35,25 +35,30 @@ deriveSerialize typq = do
 #else
       goInfo _typ0 tname vals (TyConI (DataD _ _ vars cons _)) =
 #endif
-          withBindings vals vars (\subst -> goClauses tname vals vars (zip [0..] cons) subst)
+          withBindings vals vars (\subst -> goClauses tname vals vars cons subst)
 #if MIN_VERSION_template_haskell(2,11,0)
       goInfo _typ0 tname vals (TyConI (NewtypeD _ _ vars _ con _)) =
 #else
       goInfo _typ0 tname vals (TyConI (NewtypeD _ _ vars con _)) =
 #endif
-          withBindings vals vars (\subst -> goClauses tname vals vars [(0, con)] subst)
+          withBindings vals vars (\subst -> goClauses tname vals vars [con] subst)
 #if MIN_VERSION_template_haskell(2,11,0)
       goInfo _typ0 tname vals (FamilyI (DataFamilyD famname vars _mk) _insts) =
 #else
       goInfo _typ0 tname vals (FamilyI (FamilyD DataFam famname vars _mk) _insts) =
 #endif
         withBindings vals vars
-          (\subst -> do let typ = subst (compose (ConT famname : fmap (VarT . toName) vars))
-                        error "deriveSerialize - FamilyD")
+          (\subst -> do insts <- reifyInstances famname (map (subst . VarT . toName) vars)
+                        case insts of
+                          [DataInstD _ _famname vals' cons _] ->
+                              goClauses tname vals' vars cons subst
+                          [] ->
+                              let typ = subst (compose (ConT famname : fmap (VarT . toName) vars)) in
+                              error $ "Data family instance could not be reified:\n " ++ pprint typ)
       goInfo _typ0 _tname _vals info =
           error ("deriveSerialize - unexpected info: " ++ show info)
 
-      goClauses :: Name -> [Type] -> [TyVarBndr] -> [(Int, Con)] -> (Type -> Type) -> Q Dec
+      goClauses :: Name -> [Type] -> [TyVarBndr] -> [Con] -> (Type -> Type) -> Q Dec
       goClauses tname vals vars cons subst = do
           let -- Extend the value list to ensure the resulting type is monomorphic
               vals' = map subst vals ++ map (VarT . toName) (drop (length vals) vars)
@@ -61,12 +66,18 @@ deriveSerialize typq = do
                                          (conName, fnames) <- conInfo con
                                          clause [conPat fnames (tag, con)]
                                                 (normalB (conExp cons tag conName fnames))
-                                                []) cons)
+                                                []) (zip [0..] cons))
+#if 1
               getFun = funD 'get [clause [] (normalB (case cons of
-                                                        [(_, con)] -> conGet (toName con) 1
-                                                        _ -> [|getWord8 >>= \i -> $(caseE [|i|] (map conMatch cons ++ [errorCase]))|]
-                                                     )) []]
-              errorCase = newName "n" >>= \n -> match (varP n) (normalB [|error ("deriveSerialize - unexpected tag: " ++ show $(varE n))|]) []
+                                                        [con] -> conGet' con
+                                                        _ -> [|getWord8 >>= \i -> $(caseE [|i|] (map conMatch (zip [0..] cons)))|])) []]
+#else
+              getFun = funD 'get [clause [] (normalB [|$(if length cons > 1
+                                                         then [|getWord8|]
+                                                         else [|return 0|]) >>= \i ->
+                                                       $(caseE [|i|] (map conMatch (zip [0..] cons) ++
+                                                                      [match (newName "x" >>= varP) (normalB [|error "deserialization error"|]) []]))|]) []]
+#endif
           constraints <- toList <$> deriveConstraints 0 ''Serialize tname vals'
           instanceD
             (pure constraints)
@@ -74,17 +85,21 @@ deriveSerialize typq = do
             [putFun, getFun]
       conPat fnames (_, NormalC name _) = conP name (map varP fnames)
       conPat fnames (_, RecC name _) = conP name (map varP fnames)
-      conPat fnames (_, InfixC lhs name rhs) = conP name (map varP fnames)
+      conPat fnames (_, InfixC _ name _) = conP name (map varP fnames)
       conPat fnames (tag, ForallC _ _ con) = conPat fnames (tag, con)
 
+      conExp :: [Con] -> Int -> Name -> [Name] -> ExpQ
       conExp cons tag cname fnames =
           doSeq $ (if length cons > 1 then [ [|putWord8 $(lift tag)|] ] else []) ++
                   map (\fname -> [|put $(varE fname)|]) fnames
       conMatch :: (Int, Con) -> MatchQ
-      conMatch (n, ForallC _ _ con) = conMatch (n, con)
-      conMatch (n, NormalC name sts) =     match (litP (integerL (fromIntegral n))) (normalB $ conGet name (length sts)) []
-      conMatch (n, RecC name vsts) =       match (litP (integerL (fromIntegral n))) (normalB $ conGet name (length vsts)) []
-      conMatch (n, InfixC lhs name rhs) =  match (litP (integerL (fromIntegral n))) (normalB $ conGet name 2) []
+      conMatch (n, con) = match (litP (integerL (fromIntegral n))) (normalB $ conGet' con) []
+
+      conGet' :: Con -> ExpQ
+      conGet' (ForallC _ _ con) = conGet' con
+      conGet' (NormalC name sts) = conGet name (length sts)
+      conGet' (RecC name vsts) = conGet name (length vsts)
+      conGet' (InfixC lhs name rhs) = conGet name 2
 
       conGet :: Name -> Int -> ExpQ
       conGet name arity = doApp ([|pure $(conE name)|] : replicate arity [|get|])
@@ -92,9 +107,9 @@ deriveSerialize typq = do
       doSeq es = foldl1 (\e1 e2 -> [|$e1 >> $e2|]) es
       doApp es = foldl1 (\e1 e2 -> [|$e1 <*> $e2|]) es
 
-      conInfo (NormalC name sts) = (name,) <$> mapM (\(_, n) -> newName ("a" ++ show n)) (zip sts [1..])
-      conInfo (RecC name vsts) = (name,) <$> mapM (\(_, n) -> newName ("a" ++ show n)) (zip vsts [1..])
-      conInfo (InfixC lhs name rhs) = (name,) <$> mapM (\n -> newName ("a" ++ show n)) [1, 2]
+      conInfo (NormalC name sts) = (name,) <$> mapM (\(_, n) -> newName ("a" ++ show n)) (zip sts ([1..] :: [Int]))
+      conInfo (RecC name vsts) = (name,) <$> mapM (\(_, n) -> newName ("a" ++ show n)) (zip vsts ([1..] :: [Int]))
+      conInfo (InfixC lhs name rhs) = (name,) <$> mapM (\n -> newName ("a" ++ show n)) ([1, 2] :: [Int])
       conInfo (ForallC _ _ con) = conInfo con
 
 decompose :: Type -> [Type]
