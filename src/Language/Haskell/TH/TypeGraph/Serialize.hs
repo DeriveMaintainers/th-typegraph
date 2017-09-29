@@ -67,17 +67,11 @@ deriveSerialize' typ0 = do
                                          clause [conPat fnames (tag, con)]
                                                 (normalB (conExp cons tag conName fnames))
                                                 []) (zip [0..] cons))
-#if 1
               getFun = funD 'get [clause [] (normalB (case cons of
                                                         [con] -> conGet' con
-                                                        _ -> [|getWord8 >>= \i -> $(caseE [|i|] (map conMatch (zip [0..] cons)))|])) []]
-#else
-              getFun = funD 'get [clause [] (normalB [|$(if length cons > 1
-                                                         then [|getWord8|]
-                                                         else [|return 0|]) >>= \i ->
-                                                       $(caseE [|i|] (map conMatch (zip [0..] cons) ++
-                                                                      [match (newName "x" >>= varP) (normalB [|error "deserialization error"|]) []]))|]) []]
-#endif
+                                                        _ -> [|getWord8 >>= \i -> $(caseE [|i|]
+                                                                                      (map conMatch (zip [0..] cons) ++
+                                                                                       [newName "n" >>= \n -> match (varP n) (normalB [|error $ "deriveSerialize - unexpected tag: " ++ show $(varE n)|]) []]))|])) []]
           constraints <- toList <$> deriveConstraints 0 ''Serialize tname vals'
           instanceD
             (pure constraints)

@@ -18,7 +18,7 @@ import Data.Text                     (pack, unpack)
 --import Debug.Trace
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax    (nameBase)
-import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints, withBindings, decompose)
+import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints, withBindings, compose, decompose)
 import Language.Haskell.TH.TypeGraph.TypeTraversal (toName)
 import Text.ParserCombinators.Parsec ((<|>),many1)
 import Web.Routes.PathInfo
@@ -114,7 +114,7 @@ parseInfo name vals
                               case insts of
                                 [DataInstD cx _fname vals' cs _] ->
                                     return $ Tagged (map conInfo cs) cx $ map (VarT . toName) keys
-                                [] -> error $ "Data family instance could not be reified:\n " ++ show name)
+                                [] -> error $ "derivePathInfo - data family instance " ++ show fname ++ " could not be reified:\n " ++ pprint (compose (ConT name : vals)))
 #endif
           doDec dec  = error $ "derivePathInfo - invalid input: " ++ pprint dec
           conInfo (NormalC n args) = (n, length args)
