@@ -1,6 +1,6 @@
 -- | Modified version of Web.Routes.TH
 
-{-# LANGUAGE CPP, TemplateHaskell #-}
+{-# LANGUAGE CPP, OverloadedStrings, TemplateHaskell #-}
 module Language.Haskell.TH.TypeGraph.WebRoutesTH
      ( derivePathInfo
      , derivePathInfo'
@@ -13,11 +13,13 @@ import Control.Monad                 (ap, replicateM)
 import Data.Char                     (isUpper, toLower, toUpper)
 import Data.List                     (intercalate, foldl')
 import Data.List.Split               (split, dropInitBlank, keepDelimsL, whenElt)
+import Data.Set                      (toList)
 import Data.Text                     (pack, unpack)
 import Debug.Trace
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax    (nameBase)
-import Language.Haskell.TH.TypeGraph.Phantom             (nonPhantom)
+import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints, withBindings, decompose)
+import Language.Haskell.TH.TypeGraph.TypeTraversal (toName)
 import Text.ParserCombinators.Parsec ((<|>),many1)
 import Web.Routes.PathInfo
 
@@ -26,9 +28,9 @@ import Web.Routes.PathInfo
 -- > $(derivePathInfo ''SiteURL)
 --
 -- Uses the 'standard' formatter by default.
-derivePathInfo :: Name
+derivePathInfo :: TypeQ
                -> Q [Dec]
-derivePathInfo = derivePathInfo' standard
+derivePathInfo typq = typq >>= derivePathInfo' standard . decompose
 
 -- FIXME: handle when called with a type (not data, newtype)
 
@@ -45,22 +47,22 @@ derivePathInfo = derivePathInfo' standard
 --
 -- see also: 'standard'
 derivePathInfo' :: (String -> String)
-                -> Name
+                -> [Type]
                 -> Q [Dec]
-derivePathInfo' formatter name
-    = do c <- parseInfo name
+derivePathInfo' formatter (ConT name : params)
+    = do c <- parseInfo name params
          case c of
            Tagged cons cx keys ->
-               do keys' <- nonPhantom name
-                  -- trace ("nonPhantom " ++ show name ++ " -> " ++ show keys') (pure ())
-                  let context = [ mkCtx ''PathInfo [pure key] | key <- keys' ] ++ map return cx
-                  i <- instanceD (sequence context) (mkType ''PathInfo [mkType name (map varT keys)])
+               do context <- toList <$> deriveConstraints 0 ''PathInfo name params
+                  trace ("derivePathInfo - constraints " ++ show name ++ " -> " ++ show context) (pure ())
+                  -- let context = [ mkCtx ''PathInfo [pure key] | key <- keys' ] ++ map return cx
+                  i <- instanceD (pure context) (mkType ''PathInfo [mkType name (map pure keys)])
                        [ toPathSegmentsFn cons
                        , fromPathSegmentsFn cons
                        ]
                   return [i]
     where
-#if MIN_VERSION_template_haskell(2,4,0)
+#if !MIN_VERSION_template_haskell(2,4,0)
       mkCtx = classP
 #else
       mkCtx = mkType
@@ -92,21 +94,30 @@ derivePathInfo' formatter name
 mkType :: Name -> [TypeQ] -> TypeQ
 mkType con = foldl appT (conT con)
 
-data Class = Tagged [(Name, Int)] Cxt [Name]
+data Class = Tagged [(Name, Int)] Cxt [Type]
 
-parseInfo :: Name -> Q Class
-parseInfo name
-    = do info <- reify name
-         case info of
+parseInfo :: Name -> [Type] -> Q Class
+parseInfo name vals
+    = reify name >>= doInfo
+    where doInfo (TyConI dec) = doDec dec
+          doInfo (FamilyI dec insts) = doDec dec
+          doInfo info = error $ "derivePathInfo - invalid input: " ++ pprint info
 #if MIN_VERSION_template_haskell(2,11,0)
-           TyConI (DataD cx _ keys _ cs _)    -> return $ Tagged (map conInfo cs) cx $ map conv keys
-           TyConI (NewtypeD cx _ keys _ con _)-> return $ Tagged [conInfo con] cx $ map conv keys
+          doDec (DataD cx _ keys _ cs _) = return $ Tagged (map conInfo cs) cx $ map (VarT . toName) keys
+          doDec (NewtypeD cx _ keys _ con _) = return $ Tagged [conInfo con] cx $ map (VarT . toName) keys
 #else
-           TyConI (DataD cx _ keys cs _)    -> return $ Tagged (map conInfo cs) cx $ map conv keys
-           TyConI (NewtypeD cx _ keys con _)-> return $ Tagged [conInfo con] cx $ map conv keys
+          doDec (DataD cx _ keys cs _) = return $ Tagged (map conInfo cs) cx $ map (VarT . toName) keys
+          doDec (NewtypeD cx _ keys con _) = return $ Tagged [conInfo con] cx $ map (VarT . toName) keys
+          doDec (FamilyD DataFam fname keys _) =
+              withBindings vals keys
+                (\subst -> do insts <- reifyInstances fname (map (subst . VarT . toName) keys)
+                              case insts of
+                                [DataInstD cx _fname vals' cs _] ->
+                                    return $ Tagged (map conInfo cs) cx $ map (VarT . toName) keys
+                                [] -> error $ "Data family instance could not be reified:\n " ++ show name)
 #endif
-           _                                ->  error $ "derivePathInfo - invalid input: " ++ pprint info
-    where conInfo (NormalC n args) = (n, length args)
+          doDec dec  = error $ "derivePathInfo - invalid input: " ++ pprint dec
+          conInfo (NormalC n args) = (n, length args)
           conInfo (RecC n args) = (n, length args)
           conInfo (InfixC _ n _) = (n, 2)
           conInfo (ForallC _ _ con) = conInfo con
@@ -130,7 +141,7 @@ standard =
 
 mkRoute :: Name -> Q [Dec]
 mkRoute url =
-    do (Tagged cons _ _) <- parseInfo url
+    do (Tagged cons _ _) <- parseInfo url []
        fn <- funD (mkName "route") $
                map (\(con, numArgs) ->
                         do -- methods <- parseMethods con

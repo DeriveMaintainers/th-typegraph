@@ -8,7 +8,7 @@
 
 module Language.Haskell.TH.TypeGraph.Constraints
     ( deriveConstraints
-    , withBindings
+    , withBindings, decompose, compose
     ) where
 
 import Control.Monad (MonadPlus, msum, when)
