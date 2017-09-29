@@ -15,7 +15,7 @@ import Data.List                     (intercalate, foldl')
 import Data.List.Split               (split, dropInitBlank, keepDelimsL, whenElt)
 import Data.Set                      (toList)
 import Data.Text                     (pack, unpack)
-import Debug.Trace
+--import Debug.Trace
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax    (nameBase)
 import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints, withBindings, decompose)
@@ -54,7 +54,7 @@ derivePathInfo' formatter (ConT name : params)
          case c of
            Tagged cons cx keys ->
                do context <- toList <$> deriveConstraints 0 ''PathInfo name params
-                  trace ("derivePathInfo - constraints " ++ show name ++ " -> " ++ show context) (pure ())
+                  -- trace ("derivePathInfo - constraints " ++ show name ++ " -> " ++ pprint context) (pure ())
                   -- let context = [ mkCtx ''PathInfo [pure key] | key <- keys' ] ++ map return cx
                   i <- instanceD (pure context) (mkType ''PathInfo [mkType name (map pure keys)])
                        [ toPathSegmentsFn cons

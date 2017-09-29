@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -7,11 +8,14 @@
 -- import Data.Aeson
 -- import Language.Haskell.TH.TypeGraph.Aeson (deriveJSON)
 import Language.Haskell.TH.Lift (lift)
+import Language.Haskell.TH.TypeGraph.Constraints (monomorphize)
 import Language.Haskell.TH.TypeGraph.Serialize (deriveSerialize)
 import Language.Haskell.TH.TypeGraph.TypeTraversal (pprint1)
 import Language.Haskell.TH.TypeGraph.WebRoutesTH (derivePathInfo)
+import Prelude hiding (concat)
 import Data.Aeson.TH
 import Data.Generics
+import Data.Monoid (mconcat)
 import Test.HUnit
 
 import Types
@@ -96,7 +100,7 @@ tests = do
            $(deriveSerialize [t|ValueType TestPaths|] >>= lift . pprint1))
     , TestCase
         (assertEqual "derivePathInfo Hop"
-           (concat ["instance PathInfo (Hop key) where ",
+           (concat ["instance PathInfo key => PathInfo (Hop key) where ",
                     (concat ["toPathSegments inp = case inp of NamedField arg arg arg arg arg arg arg -> (++) [pack ['n', 'a', 'm', 'e', 'd', '-', 'f', 'i', 'e', 'l', 'd']] ((++) (toPathSegments arg) ((++) (toPathSegments arg) ((++) (toPathSegments arg) ((++) (toPathSegments arg) ((++) (toPathSegments arg) ((++) (toPathSegments arg) (toPathSegments arg))))))) AnonField arg arg arg arg arg arg -> (++) [pack ['a', 'n', 'o', 'n', '-', 'f', 'i', 'e', 'l', 'd']] ((++) (toPathSegments arg) ((++) (toPathSegments arg) ((++) (toPathSegments arg) ((++) (toPathSegments arg) ((++) (toPathSegments arg) (toPathSegments arg)))))) TupleHop arg -> (++) [pack ['t', 'u', 'p', 'l', 'e', '-', 'h', 'o', 'p']] (toPathSegments arg) IndexHop arg -> (++) [pack ['i', 'n', 'd', 'e', 'x', '-', 'h', 'o', 'p']] (toPathSegments arg) ViewHop -> [pack ['v', 'i', 'e', 'w', '-', 'h', 'o', 'p']] IxViewHop arg -> (++) [pack ['i', 'x', '-', 'v', 'i', 'e', 'w', '-', 'h', 'o', 'p']] (toPathSegments arg) ",
                              "fromPathSegments = (<|>) ((<|>) ((<|>) ((<|>) ((<|>) (ap (ap (ap (ap (ap (ap (ap (segment (pack \"named-field\") >> return NamedField) fromPathSegments) fromPathSegments) fromPathSegments) fromPathSegments) fromPathSegments) fromPathSegments) fromPathSegments) (ap (ap (ap (ap (ap (ap (segment (pack \"anon-field\") >> return AnonField) fromPathSegments) fromPathSegments) fromPathSegments) fromPathSegments) fromPathSegments) fromPathSegments)) (ap (segment (pack \"tuple-hop\") >> return TupleHop) fromPathSegments)) (ap (segment (pack \"index-hop\") >> return IndexHop) fromPathSegments)) (segment (pack \"view-hop\") >> return ViewHop)) (ap (segment (pack \"ix-view-hop\") >> return IxViewHop) fromPathSegments)"])])
            $(derivePathInfo [t|Hop|] >>= lift . pprint1))
@@ -114,6 +118,17 @@ tests = do
                                                 "Array arr -> if length arr == 3 then ((TraversalPath <$> parseJSON (arr `unsafeIndex` 0)) <*> parseJSON (arr `unsafeIndex` 1)) <*> parseJSON (arr `unsafeIndex` 2) else parseTypeMismatch' \"TraversalPath\" \"Types.TraversalPath\" \"Array of length 3\" (\"Array of length \" ++ (show . length) arr) ",
                                                 "other -> parseTypeMismatch' \"TraversalPath\" \"Types.TraversalPath\" \"Array\" (valueConName other)"])
            $(deriveJSON defaultOptions ''TraversalPath >>= lift . pprint1))
+    , TestCase
+        (assertEqual "derivePathInfo TraversalPath"
+           "instance (PathInfo (KeyType t), PathInfo (ProxyType t)) => PathInfo (TraversalPath t s a) where toPathSegments inp = case inp of TraversalPath arg arg arg -> (++) [pack ['t', 'r', 'a', 'v', 'e', 'r', 's', 'a', 'l', '-', 'p', 'a', 't', 'h']] ((++) (toPathSegments arg) ((++) (toPathSegments arg) (toPathSegments arg))) fromPathSegments = ap (ap (ap (segment (pack \"traversal-path\") >> return TraversalPath) fromPathSegments) fromPathSegments) fromPathSegments"
+           $(derivePathInfo [t|TraversalPath|] >>= lift . pprint1))
+    , TestCase (assertEqual "monomorphize Hop" "Hop key" $(monomorphize [t|Hop|] >>= lift . pprint1))
+    , TestCase (assertEqual "monomorphize TraversalPath" "TraversalPath t s a" $(monomorphize [t|TraversalPath|] >>= lift . pprint1))
+    , TestCase (assertEqual "monomorphize TraversalPath" "TraversalPath TestPaths s a" $(monomorphize [t|TraversalPath TestPaths|] >>= lift . pprint1))
     ]
+
+-- | Without a specialized concat the text values come out as @pack ['a', 'b', 'c']@
+concat :: [String] -> String
+concat = mconcat
 
 main = runTestTT tests

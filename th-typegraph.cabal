@@ -53,6 +53,14 @@ library
     userid,
     web-routes
 
+test-suite th-typegraph-tests
+  default-language: Haskell2010
+  type: exitcode-stdio-1.0
+  ghc-options: -Wall
+  hs-source-dirs: test
+  main-is: Main.hs
+  build-depends: base, th-lift, HUnit, aeson, syb, template-haskell, network-uri, th-typegraph
+
 source-repository head
   type:     git
   location: git://github.com/seereason/th-typegraph.git
