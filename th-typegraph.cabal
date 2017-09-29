@@ -30,6 +30,12 @@ library
     Language.Haskell.TH.TypeGraph.Serialize
     Language.Haskell.TH.TypeGraph.TypeTraversal
     Language.Haskell.TH.TypeGraph.WebRoutesTH
+    Language.Haskell.TH.TypeGraph.Aeson
+  other-modules:
+    Language.Haskell.TH.TypeGraph.AesonEncodeBuilder
+    Language.Haskell.TH.TypeGraph.AesonEncodeFunctions
+    Language.Haskell.TH.TypeGraph.AesonTypesClass
+    Language.Haskell.TH.TypeGraph.AesonTypesInternal
   build-depends:
     aeson,
     base >= 4.8 && < 5,
@@ -51,7 +57,15 @@ library
     th-orphans,
     time,
     userid,
-    web-routes
+    web-routes,
+    unordered-containers,
+    vector,
+    bytestring,
+    scientific,
+    semigroups,
+    deepseq,
+    hashable,
+    fail
 
 test-suite th-typegraph-tests
   default-language: Haskell2010

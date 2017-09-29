@@ -113,7 +113,7 @@ parseInfo name vals
                 (\subst -> do insts <- reifyInstances fname (map (subst . VarT . toName) keys)
                               case insts of
                                 [DataInstD cx _fname vals' cs _] ->
-                                    return $ Tagged (map conInfo cs) cx $ map (VarT . toName) keys
+                                    return $ Tagged (map conInfo cs) cx $ map (subst . VarT . toName) keys
                                 [] -> error $ "derivePathInfo - data family instance " ++ show fname ++ " could not be reified:\n " ++ pprint (compose (ConT name : vals)))
 #endif
           doDec dec  = error $ "derivePathInfo - invalid input: " ++ pprint dec
