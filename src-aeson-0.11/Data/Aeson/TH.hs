@@ -81,7 +81,7 @@ $('deriveJSON' 'defaultOptions' ''(,,,))
 
 -}
 
-module Language.Haskell.TH.TypeGraph.Aeson
+module Data.Aeson.TH
     ( -- * Encoding configuration
       Options(..), SumEncoding(..), defaultOptions, defaultTaggedObject
 

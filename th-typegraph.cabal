@@ -34,9 +34,9 @@ library
     Language.Haskell.TH.TypeGraph.Serialize
     Language.Haskell.TH.TypeGraph.TypeTraversal
     Language.Haskell.TH.TypeGraph.WebRoutesTH
-    Language.Haskell.TH.TypeGraph.Aeson
   if impl(ghcjs)
     other-modules:
+      Data.Aeson.TH
       Data.Aeson.Encode.ByteString
       Data.Aeson.Functions
       Data.Aeson.Parser.Internal
@@ -46,6 +46,7 @@ library
       Data.Aeson.Types.Internal
   else
     other-modules:
+      Data.Aeson.TH
       Data.Aeson.Encode.Builder
       Data.Aeson.Encode.Functions
       Data.Aeson.Functions
