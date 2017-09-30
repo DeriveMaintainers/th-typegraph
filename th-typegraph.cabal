@@ -37,13 +37,6 @@ library
   if impl(ghcjs)
     other-modules:
       Data.Aeson.TH
-      Data.Aeson.Encode.ByteString
-      Data.Aeson.Functions
-      Data.Aeson.Parser.Internal
-      Data.Aeson.Types.Class
-      Data.Aeson.Types.Generic
-      Data.Aeson.Types.Instances
-      Data.Aeson.Types.Internal
   else
     other-modules:
       Data.Aeson.TH
