@@ -34,21 +34,7 @@ library
     Language.Haskell.TH.TypeGraph.Serialize
     Language.Haskell.TH.TypeGraph.TypeTraversal
     Language.Haskell.TH.TypeGraph.WebRoutesTH
-  if impl(ghcjs)
-    other-modules:
-      Data.Aeson.TH
-  else
-    other-modules:
-      Data.Aeson.TH
-      Data.Aeson.Encode.Builder
-      Data.Aeson.Encode.Functions
-      Data.Aeson.Functions
-      Data.Aeson.Parser.Internal
-      Data.Aeson.Parser.Time
-      Data.Aeson.Types.Class
-      Data.Aeson.Types.Generic
-      Data.Aeson.Types.Instances
-      Data.Aeson.Types.Internal
+    Data.Aeson.TH
   build-depends:
     aeson,
     base >= 4.8 && < 5,

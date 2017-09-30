@@ -8,7 +8,6 @@
 module Types where
 
 import Data.Aeson
-import qualified Data.Aeson.TH as Old (deriveJSON)
 import Data.Generics
 import Language.Haskell.TH
 import Network.URI
