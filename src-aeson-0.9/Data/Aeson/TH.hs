@@ -100,6 +100,7 @@ import Data.List           ( (++), foldl, foldl', intercalate
                            , length, map, zip, genericLength, all, partition
                            )
 import Data.Maybe          ( Maybe(Nothing, Just), catMaybes )
+import Data.Set as Set     ( toList )
 import Prelude             ( String, (-), Integer, fromIntegral, error )
 import Text.Printf         ( printf )
 import Text.Show           ( show )
@@ -113,6 +114,9 @@ import qualified Data.Text as T ( Text, pack, unpack )
 -- from vector:
 import qualified Data.Vector as V ( unsafeIndex, null, length, create, fromList )
 import qualified Data.Vector.Mutable as VM ( unsafeNew, unsafeWrite )
+-- from th-typegraph
+import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints)
+import Language.Haskell.TH.TypeGraph.TypeTraversal (toName)
 
 
 --------------------------------------------------------------------------------
@@ -161,7 +165,8 @@ deriveToJSON opts name =
   where
     fromCons :: [TyVarBndr] -> [Con] -> Q Dec
     fromCons tvbs cons =
-        instanceD (applyCon ''ToJSON typeNames)
+        let preds = Set.toList <$> deriveConstraints 0 ''ToJSON name (map (VarT . toName) tvbs) in
+        instanceD preds
                   (classType `appT` instanceType)
                   [ funD 'toJSON
                          [ clause []
@@ -368,7 +373,8 @@ deriveFromJSON opts name =
   where
     fromCons :: [TyVarBndr] -> [Con] -> Q Dec
     fromCons tvbs cons =
-        instanceD (applyCon ''FromJSON typeNames)
+        let preds = Set.toList <$> deriveConstraints 0 ''FromJSON name (map (VarT . toName) tvbs) in
+        instanceD preds
                   (classType `appT` instanceType)
                   [ funD 'parseJSON
                          [ clause []
@@ -868,12 +874,3 @@ valueConName (String _) = "String"
 valueConName (Number _) = "Number"
 valueConName (Bool   _) = "Boolean"
 valueConName Null       = "Null"
-
-applyCon :: Name -> [Name] -> Q [Pred]
-applyCon con typeNames = return (map apply typeNames)
-  where apply t =
-#if MIN_VERSION_template_haskell(2,10,0)
-          AppT (ConT con) (VarT t)
-#else
-          ClassP con [VarT t]
-#endif
