@@ -96,7 +96,7 @@ import Data.Function       ( ($), (.) )
 import Data.Functor        ( fmap )
 import Data.Int            ( Int )
 import Data.Either         ( Either(Left, Right) )
-import Data.List           ( (++), foldl, foldl', intercalate
+import Data.List           ( (++), any, find, foldl, foldl', intercalate
                            , length, map, zip, genericLength, all, partition
                            )
 import Data.Maybe          ( Maybe(Nothing, Just), catMaybes )
@@ -161,7 +161,7 @@ deriveToJSON :: Options
              -- declaration.
              -> Q [Dec]
 deriveToJSON opts name =
-    withType name $ \tvbs cons -> fmap (:[]) $ fromCons tvbs cons
+    withType name $ \_ tvbs cons _ -> fmap (:[]) $ fromCons tvbs cons
   where
     fromCons :: [TyVarBndr] -> [Con] -> Q Dec
     fromCons tvbs cons =
@@ -183,7 +183,7 @@ deriveToJSON opts name =
 mkToJSON :: Options -- ^ Encoding options.
          -> Name -- ^ Name of the type to encode.
          -> Q Exp
-mkToJSON opts name = withType name (\_ cons -> consToJSON opts cons)
+mkToJSON opts name = withType name (\_ _ cons _ -> consToJSON opts cons)
 
 -- | Helper function used by both 'deriveToJSON' and 'mkToJSON'. Generates code
 -- to generate the JSON encoding of a number of constructors. All constructors
@@ -369,7 +369,7 @@ deriveFromJSON :: Options
                -- declaration.
                -> Q [Dec]
 deriveFromJSON opts name =
-    withType name $ \tvbs cons -> fmap (:[]) $ fromCons tvbs cons
+    withType name $ \_ tvbs cons _ -> fmap (:[]) $ fromCons tvbs cons
   where
     fromCons :: [TyVarBndr] -> [Con] -> Q Dec
     fromCons tvbs cons =
@@ -393,7 +393,7 @@ mkParseJSON :: Options -- ^ Encoding options.
             -> Name -- ^ Name of the encoded type.
             -> Q Exp
 mkParseJSON opts name =
-    withType name (\_ cons -> consFromJSON name opts cons)
+    withType name (\_ _ cons _ -> consFromJSON name opts cons)
 
 -- | Helper function used by both 'deriveFromJSON' and 'mkParseJSON'. Generates
 -- code to parse the JSON encoding of a number of constructors. All constructors
@@ -823,7 +823,7 @@ parseTypeMismatch' tName conName expected actual =
 -- type constructor must be either a data type or a newtype. Any other
 -- value will result in an exception.
 withType :: Name
-         -> ([TyVarBndr] -> [Con] -> Q a)
+         -> (Name -> [TyVarBndr] -> [Con] -> Maybe [Type] -> Q a)
          -- ^ Function that generates the actual code. Will be applied
          -- to the type variable binders and constructors extracted
          -- from the given 'Name'.
@@ -834,11 +834,26 @@ withType name f = do
     case info of
       TyConI dec ->
         case dec of
-          DataD    _ _ tvbs cons _ -> f tvbs cons
-          NewtypeD _ _ tvbs con  _ -> f tvbs [con]
-          other -> error $ "Data.Aeson.TH.withType: Unsupported type: "
-                          ++ show other
+          DataD    _ _ tvbs cons _ -> f name tvbs cons Nothing
+          NewtypeD _ _ tvbs con  _ -> f name tvbs [con] Nothing
+          other -> error $ "deriveJSON - Unsupported type: " ++ show other
+      DataConI _ _ parentName _ -> do
+        parentInfo <- reify parentName
+        case parentInfo of
+          FamilyI (FamilyD DataFam _ tvbs _) decs -> do
+            let instDec = find (testInst name) decs
+            case instDec of
+              Just (DataInstD    _ _ instTys   cons _) -> f parentName tvbs cons $ Just instTys
+              Just (NewtypeInstD _ _ instTys   con  _) -> f parentName tvbs [con] $ Just instTys
+              _ -> error $ "deriveJSON - Could not find data or newtype instance constructor."
+          _ -> error $ "deriveJSON - Data constructor " ++ show name ++
+                       " is not from a data family instance constructor."
       _ -> error "Data.Aeson.TH.withType: I need the name of a type."
+
+testInst :: Name -> Dec -> Bool
+testInst name (DataInstD    _ _ _   cons _) = any ((name ==) . getConName) cons
+testInst name (NewtypeInstD _ _ _   con  _) = name == getConName con
+testInst _ _ = error $ "deriveJSON - Must be a data or newtype instance."
 
 -- | Extracts the name from a constructor.
 getConName :: Con -> Name
