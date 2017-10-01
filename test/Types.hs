@@ -73,3 +73,10 @@ data Hop key
     deriving Show
 
 data TraversalPath t s a = TraversalPath (ProxyType t) [Hop (KeyType t)] (ProxyType t)
+
+data family OldType schema current
+
+data Schema1 = Schema1 deriving Data
+type Author = ()
+
+data instance OldType Schema1 Author = Author_Schema1 Int Char (Maybe Float) Double deriving (Eq, Ord, Data, Show)

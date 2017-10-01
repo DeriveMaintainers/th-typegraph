@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, FlexibleInstances, IncoherentInstances, NamedFieldPuns,
-    NoImplicitPrelude, OverlappingInstances, TemplateHaskell,
+    NoImplicitPrelude, TemplateHaskell,
     UndecidableInstances #-}
 
 {-|
@@ -884,7 +884,24 @@ withType typeq f =
               _ -> error $ "deriveJSON - Could not find data or newtype instance constructor."
           _ -> error $ "deriveJSON - Data constructor " ++ show name ++
                        " is not from a data family instance constructor."
-    goInfo _ _ _ = error "Data.Aeson.TH.withType: I need the name of a type."
+#if MIN_VERSION_template_haskell(2,11,0)
+    goInfo name tparams (FamilyI (DataFamilyD fname tvbs mkind) insts) =
+#else
+    goInfo name tparams (FamilyI (FamilyD DataFam fname tvbs mkind) insts) =
+#endif
+        withBindings tparams tvbs
+          (\subst -> do
+             insts' <- reifyInstances fname (map (subst . VarT . toName) tvbs)
+             case insts' of
+#if MIN_VERSION_template_haskell(2,11,0)
+               [DataInstD _ _fname instTys _ cons _] -> f fname tvbs cons (Just instTys) subst
+               [NewtypeInstD _ _fname instTys _ con _] -> f fname tvbs [con] (Just instTys) subst
+#else
+               [DataInstD _ _fname instTys cons _] -> f fname tvbs cons (Just instTys) subst
+               [NewtypeInstD _ _fname instTys con _] -> f fname tvbs [con] (Just instTys) subst
+#endif
+               _ -> error $ "deriveJSON - Could not find data family instance: " ++ show (compose (ConT fname : tparams)) ++ "\n  insts=" ++ show insts)
+    goInfo _ _ info = error $ "Data.Aeson.TH.withType: I need the name of a type - " ++ show info
 
 testInst :: Name -> Dec -> Bool
 #if MIN_VERSION_template_haskell(2,11,0)

@@ -1169,7 +1169,7 @@ buildTypeInstance :: Name
 buildTypeInstance tyConName constraint tvbs Nothing subst =
     let varTys :: [Type]
         varTys = map tvbToType tvbs
-    in buildTypeInstanceFromTys tyConName constraint varTys False
+    in buildTypeInstanceFromTys tyConName constraint varTys False subst
 -- Data family instance case
 --
 -- The CPP is present to work around a couple of annoying old GHC bugs.
@@ -1255,7 +1255,7 @@ buildTypeInstance dataFamName constraint tvbs (Just instTysAndKinds) subst = do
                   -- grab the correct kind.
                 $ zipWith stealKindForType tvbs (givenTys ++ xTys)
 #endif
-    buildTypeInstanceFromTys dataFamName constraint instTys True
+    buildTypeInstanceFromTys dataFamName constraint instTys True subst
 
 -- For the given Types, generate an instance context and head.
 buildTypeInstanceFromTys :: Name
@@ -1266,14 +1266,15 @@ buildTypeInstanceFromTys :: Name
                          -- ^ The types to instantiate the instance with
                          -> Bool
                          -- ^ True if it's a data family, False otherwise
+                         -> (Type -> Type)
                          -> Q (Cxt, Type)
-buildTypeInstanceFromTys tyConName constraint varTysOrig isDataFamily = do
+buildTypeInstanceFromTys tyConName constraint varTysOrig isDataFamily subst = do
     -- Make sure to expand through type/kind synonyms! Otherwise, we won't
     -- be able to infer constraints as accurately.
     varTysExp <- mapM expandSyn varTysOrig
 
         -- Derive instance constraints for type variables of kind *
-    preds <- deriveConstraints 0 constraint tyConName varTysExp
+    preds <- deriveConstraints 0 constraint tyConName (fmap subst varTysExp)
 
     let varTys :: [Type]
         -- See Note [Kind signatures in derived instances] for an explanation
@@ -1290,7 +1291,7 @@ buildTypeInstanceFromTys tyConName constraint varTysOrig isDataFamily = do
         instanceType = AppT (ConT constraint)
                      $ applyTyCon tyConName varTys
 
-    return (instanceCxt, instanceType)
+    return (instanceCxt, subst instanceType)
 
 -- | Attempt to derive a constraint on a Type. If it's of kind *,
 -- we give it Just a ToJSON/FromJSON constraint. Otherwise, return Nothing.
