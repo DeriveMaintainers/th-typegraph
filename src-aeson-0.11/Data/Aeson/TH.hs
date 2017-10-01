@@ -445,7 +445,7 @@ argsToValue opts multiCons (ForallC _ _ con) subst =
 argsToValue opts multiCons (GadtC conNames ts _) subst =
     argsToValue opts multiCons (NormalC (head conNames) ts) subst
 
-argsToValue opts multiCons (RecGadtC conNames ts _) =
+argsToValue opts multiCons (RecGadtC conNames ts _) subst =
     argsToValue opts multiCons (RecC (head conNames) ts) subst
 #endif
 
@@ -932,10 +932,10 @@ parseArgs tName opts (ForallC _ _ con) contents subst =
 -- GADTs. We ignore the refined return type and proceed as if it were a
 -- NormalC or RecC.
 parseArgs tName opts (GadtC conNames ts _) contents subst =
-    parseArgs tName opts (NormalC (head conNames) ts) contents
+    parseArgs tName opts (NormalC (head conNames) ts) contents subst
 
 parseArgs tName opts (RecGadtC conNames ts _) contents subst =
-    parseArgs tName opts (RecC (head conNames) ts) contents
+    parseArgs tName opts (RecC (head conNames) ts) contents subst
 #endif
 
 -- | Generates code to parse the JSON encoding of an n-ary
@@ -1140,8 +1140,13 @@ withType typeq f =
           (\subst -> do
              insts' <- reifyInstances fname (map (subst . VarT . toName) tvbs)
              case insts' of
+#if MIN_VERSION_template_haskell(2,11,0)
+               [DataInstD _ _fname instTys _ cons _] -> f fname tvbs cons (Just instTys) subst
+               [NewtypeInstD _ _fname instTys _ con _] -> f fname tvbs [con] (Just instTys) subst
+#else
                [DataInstD _ _fname instTys cons _] -> f fname tvbs cons (Just instTys) subst
                [NewtypeInstD _ _fname instTys con _] -> f fname tvbs [con] (Just instTys) subst
+#endif
                _ -> error $ "deriveJSON - Could not find data family instance: " ++ show (compose (ConT fname : tparams)) ++ "\n  insts=" ++ show insts)
       goInfo _ _ _ = error $ "deriveJSON - I need the name of a plain data type constructor, "
                               ++ "or a data family instance constructor."

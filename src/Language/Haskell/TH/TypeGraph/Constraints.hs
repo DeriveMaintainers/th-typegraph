@@ -35,15 +35,24 @@ monomorphize typq = typq >>= \typ0 -> go typ0 $ decompose typ0
       goInfo _typ0 vals (TyConI dec) = goDec vals dec
       goInfo _typ0 vals (FamilyI dec _insts) = goDec vals dec
       goInfo typ0 _vals info = error $ "monomorphize - unexpected type " ++ pprint1 info ++ " (via " ++ pprint1 typ0 ++ ")"
+#if MIN_VERSION_template_haskell(2,11,0)
+      goDec vals (DataD _ tname vars _ _ _) = goVars (ConT tname) vals vars
+      goDec vals (NewtypeD _ tname vars _ _ _) = goVars (ConT tname) vals vars
+#else
       goDec vals (DataD _ tname vars _ _) = goVars (ConT tname) vals vars
       goDec vals (NewtypeD _ tname vars _ _) = goVars (ConT tname) vals vars
+#endif
       -- These type variables are parameters to the data family type
       -- function, not to the type resulting from using the type
       -- function.  Therefore we do not bind them to the vals
       -- argument, they are unified with each instance.
       goDec vals (TySynD _tname vars typ) =
           withBindings vals vars (\subst -> go (subst typ) (decompose typ))
+#if MIN_VERSION_template_haskell(2,11,0)
+      goDec vals (DataFamilyD fname fvars mkind) = do
+#else
       goDec vals (FamilyD DataFam fname fvars mkind) = do
+#endif
         -- We can learn the arity of this type from its kind.
         -- Then we can create extra type variables to make this
         -- monomorphic.

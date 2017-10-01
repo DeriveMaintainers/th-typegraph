@@ -101,10 +101,17 @@ parseInfo name vals
     = reify name >>= doInfo
     where doInfo (TyConI dec) = doDec dec
           doInfo (FamilyI dec insts) = doDec dec
-          doInfo info = error $ "derivePathInfo - invalid input: " ++ pprint info
+          doInfo info = error $ "derivePathInfo - invalid input: " ++ show info
 #if MIN_VERSION_template_haskell(2,11,0)
           doDec (DataD cx _ keys _ cs _) = return $ Tagged (map conInfo cs) cx $ map (VarT . toName) keys
           doDec (NewtypeD cx _ keys _ con _) = return $ Tagged [conInfo con] cx $ map (VarT . toName) keys
+          doDec (DataFamilyD fname keys _) =
+              withBindings vals keys
+                (\subst -> do insts <- reifyInstances fname (map (subst . VarT . toName) keys)
+                              case insts of
+                                [DataInstD cx _fname vals' _ cs _] ->
+                                    return $ Tagged (map conInfo cs) cx $ map (subst . VarT . toName) keys
+                                [] -> error $ "derivePathInfo - data family instance " ++ show fname ++ " could not be reified:\n " ++ pprint (compose (ConT name : vals)))
 #else
           doDec (DataD cx _ keys cs _) = return $ Tagged (map conInfo cs) cx $ map (VarT . toName) keys
           doDec (NewtypeD cx _ keys con _) = return $ Tagged [conInfo con] cx $ map (VarT . toName) keys
@@ -116,7 +123,7 @@ parseInfo name vals
                                     return $ Tagged (map conInfo cs) cx $ map (subst . VarT . toName) keys
                                 [] -> error $ "derivePathInfo - data family instance " ++ show fname ++ " could not be reified:\n " ++ pprint (compose (ConT name : vals)))
 #endif
-          doDec dec  = error $ "derivePathInfo - invalid input: " ++ pprint dec
+          doDec dec  = error $ "derivePathInfo - invalid input: " ++ show dec
           conInfo (NormalC n args) = (n, length args)
           conInfo (RecC n args) = (n, length args)
           conInfo (InfixC _ n _) = (n, 2)

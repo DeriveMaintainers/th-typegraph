@@ -50,7 +50,11 @@ deriveSerialize' typ0 = do
         withBindings vals vars
           (\subst -> do insts <- reifyInstances famname (map (subst . VarT . toName) vars)
                         case insts of
+#if MIN_VERSION_template_haskell(2,11,0)
+                          [DataInstD _ _famname vals' _ cons _] ->
+#else
                           [DataInstD _ _famname vals' cons _] ->
+#endif
                               goClauses tname vals' vars cons subst
                           [] ->
                               let typ = subst (compose (ConT famname : fmap (VarT . toName) vars)) in
