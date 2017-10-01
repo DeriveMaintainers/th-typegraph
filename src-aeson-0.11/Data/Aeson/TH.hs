@@ -98,7 +98,7 @@ module Data.Aeson.TH
 
 import Control.Applicative ( pure, (<$>), (<*>) )
 import Data.Aeson hiding (fromEncoding, object)
-import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints, decompose, withBindings)
+import Language.Haskell.TH.TypeGraph.Constraints (compose, decompose, deriveConstraints, toName, withBindings)
 import Data.Aeson.Types ( Value(..), Parser
                         , Options(..)
                         , SumEncoding(..)
@@ -1129,12 +1129,20 @@ withType typeq f =
                   _ -> error $ "deriveJSON - Could not find data or newtype instance constructor."
           info -> error $ "deriveJSON - Data constructor " ++ show name ++
             " is not from a data family instance constructor."
+      -- If the type is a family name, we need to determine which
+      -- instance the type function returns
 #if MIN_VERSION_template_haskell(2,11,0)
-      goInfo name tparams (FamilyI (DataFamilyD _ tvbs _) insts) =
+      goInfo name tparams (FamilyI (DataFamilyD fname tvbs mkind) insts) =
 #else
-      goInfo name tparams (FamilyI (FamilyD DataFam _ _ _) insts) =
+      goInfo name tparams (FamilyI (FamilyD DataFam fname tvbs mkind) insts) =
 #endif
-        error $ "deriveJSON - Cannot use a data family name. Use a data family instance constructor instead."
+        withBindings tparams tvbs
+          (\subst -> do
+             insts' <- reifyInstances fname (map (subst . VarT . toName) tvbs)
+             case insts' of
+               [DataInstD _ _fname instTys cons _] -> f fname tvbs cons (Just instTys) subst
+               [NewtypeInstD _ _fname instTys con _] -> f fname tvbs [con] (Just instTys) subst
+               _ -> error $ "deriveJSON - Could not find data family instance: " ++ show (compose (ConT fname : tparams)) ++ "\n  insts=" ++ show insts)
       goInfo _ _ _ = error $ "deriveJSON - I need the name of a plain data type constructor, "
                               ++ "or a data family instance constructor."
 

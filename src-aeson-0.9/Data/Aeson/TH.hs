@@ -115,7 +115,7 @@ import qualified Data.Text as T ( Text, pack, unpack )
 import qualified Data.Vector as V ( unsafeIndex, null, length, create, fromList )
 import qualified Data.Vector.Mutable as VM ( unsafeNew, unsafeWrite )
 -- from th-typegraph
-import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints, decompose, withBindings)
+import Language.Haskell.TH.TypeGraph.Constraints (compose, decompose, deriveConstraints, toName, withBindings)
 import Language.Haskell.TH.TypeGraph.TypeTraversal (toName)
 
 
