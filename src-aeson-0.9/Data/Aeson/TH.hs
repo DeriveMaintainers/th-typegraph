@@ -852,25 +852,48 @@ withType typeq f =
     go (ConT name : tparams) = reify name >>= goInfo name tparams
     goInfo name tparams (TyConI dec) =
         case dec of
+#if MIN_VERSION_template_haskell(2,11,0)
+          DataD    _ _ tvbs _ cons _ -> withBindings tparams tvbs (f name tvbs cons Nothing)
+          NewtypeD _ _ tvbs _ con  _ -> withBindings tparams tvbs (f name tvbs [con] Nothing)
+#else
           DataD    _ _ tvbs cons _ -> withBindings tparams tvbs (f name tvbs cons Nothing)
           NewtypeD _ _ tvbs con  _ -> withBindings tparams tvbs (f name tvbs [con] Nothing)
+#endif
           other -> error $ "deriveJSON - Unsupported type: " ++ show other
+#if MIN_VERSION_template_haskell(2,11,0)
+    goInfo name tparams (DataConI _ _ parentName) = do
+#else
     goInfo name tparams (DataConI _ _ parentName _) = do
+#endif
         parentInfo <- reify parentName
         case parentInfo of
+#if MIN_VERSION_template_haskell(2,11,0)
+          FamilyI (DataFamilyD _ tvbs _) decs -> do
+#else
           FamilyI (FamilyD DataFam _ tvbs _) decs -> do
+#endif
             let instDec = find (testInst name) decs
             case instDec of
+#if MIN_VERSION_template_haskell(2,11,0)
+              Just (DataInstD    _ _ instTys   _ cons _) -> withBindings tparams tvbs (f parentName tvbs cons (Just instTys))
+              Just (NewtypeInstD _ _ instTys   _ con  _) -> withBindings tparams tvbs (f parentName tvbs [con] (Just instTys))
+#else
               Just (DataInstD    _ _ instTys   cons _) -> withBindings tparams tvbs (f parentName tvbs cons (Just instTys))
               Just (NewtypeInstD _ _ instTys   con  _) -> withBindings tparams tvbs (f parentName tvbs [con] (Just instTys))
+#endif
               _ -> error $ "deriveJSON - Could not find data or newtype instance constructor."
           _ -> error $ "deriveJSON - Data constructor " ++ show name ++
                        " is not from a data family instance constructor."
     goInfo _ _ _ = error "Data.Aeson.TH.withType: I need the name of a type."
 
 testInst :: Name -> Dec -> Bool
+#if MIN_VERSION_template_haskell(2,11,0)
+testInst name (DataInstD    _ _ _   _ cons _) = any ((name ==) . getConName) cons
+testInst name (NewtypeInstD _ _ _   _ con  _) = name == getConName con
+#else
 testInst name (DataInstD    _ _ _   cons _) = any ((name ==) . getConName) cons
 testInst name (NewtypeInstD _ _ _   con  _) = name == getConName con
+#endif
 testInst _ _ = error $ "deriveJSON - Must be a data or newtype instance."
 
 -- | Extracts the name from a constructor.
