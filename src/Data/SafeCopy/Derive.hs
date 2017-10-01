@@ -5,7 +5,7 @@
 #define MIN_VERSION_template_haskell(x,y,z) 1
 #endif
 
-module Language.Haskell.TH.TypeGraph.SafeCopyDerive where
+module Data.SafeCopy.Derive where
 
 import Language.Haskell.TH.TypeGraph.Phantom (nonPhantom)
 import Language.Haskell.TH.TypeGraph.TypeTraversal (pprint1)
