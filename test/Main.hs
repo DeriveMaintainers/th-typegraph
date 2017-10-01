@@ -72,7 +72,7 @@ tests = do
            $(deriveJSON' defaultOptions [t|ValueType TestPaths|] >>= lift . pprint1))
     , TestCase
         (assertEqual "deriveJSON' defaultOptions [t|OldType Schema1 Author|]"
-           ("" :: String)
+           ("instance ToJSON (OldType Schema1 Author) where toJSON = \\value -> case value of Author_Schema1 arg1 arg2 arg3 arg4 -> Array (create (do {mv <- unsafeNew 4; unsafeWrite mv 0 (toJSON arg1); unsafeWrite mv 1 (toJSON arg2); unsafeWrite mv 2 (toJSON arg3); unsafeWrite mv 3 (toJSON arg4); return mv})) toEncoding = \\value -> case value of Author_Schema1 arg1 arg2 arg3 arg4 -> Encoding (char7 '[' <> ((builder arg1 <> (char7 ',' <> (builder arg2 <> (char7 ',' <> (builder arg3 <> (char7 ',' <> builder arg4)))))) <> char7 ']')) instance FromJSON (OldType Schema1 Author) where parseJSON = \\value -> case value of Array arr -> if length arr == 4 then (((Author_Schema1 <$> parseJSON (arr `unsafeIndex` 0)) <*> parseJSON (arr `unsafeIndex` 1)) <*> parseJSON (arr `unsafeIndex` 2)) <*> parseJSON (arr `unsafeIndex` 3) else parseTypeMismatch' \"Author_Schema1\" \"Types.OldType\" \"Array of length 4\" (\"Array of length \" ++ (show . length) arr) other -> parseTypeMismatch' \"Author_Schema1\" \"Types.OldType\" \"Array\" (valueConName other)" :: String)
            $(deriveJSON' defaultOptions [t|OldType Schema1 Author|] >>= lift . pprint1))
     , TestCase
         (assertEqual "derivePathInfo TraversalPath"
