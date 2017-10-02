@@ -931,11 +931,11 @@ parseArgs tName opts (ForallC _ _ con) contents unbound subst =
 #if MIN_VERSION_template_haskell(2,11,0)
 -- GADTs. We ignore the refined return type and proceed as if it were a
 -- NormalC or RecC.
-parseArgs tName opts (GadtC conNames ts _) contents subst =
-    parseArgs tName opts (NormalC (head conNames) ts) contents subst
+parseArgs tName opts (GadtC conNames ts _) contents unbound subst =
+    parseArgs tName opts (NormalC (head conNames) ts) contents unbound subst
 
-parseArgs tName opts (RecGadtC conNames ts _) contents subst =
-    parseArgs tName opts (RecC (head conNames) ts) contents subst
+parseArgs tName opts (RecGadtC conNames ts _) contents unbound subst =
+    parseArgs tName opts (RecC (head conNames) ts) contents unbound subst
 #endif
 
 -- | Generates code to parse the JSON encoding of an n-ary

@@ -106,7 +106,7 @@ parseInfo name vals
           doDec (DataD cx _ keys _ cs _) = return $ Tagged (map conInfo cs) cx $ map (VarT . toName) keys
           doDec (NewtypeD cx _ keys _ con _) = return $ Tagged [conInfo con] cx $ map (VarT . toName) keys
           doDec (DataFamilyD fname keys _) =
-              withBindings vals keys
+              withBindings keys vals
                 (\unbound subst -> do
                    insts <- reifyInstances fname (map subst (map (VarT . toName) keys ++ unbound))
                    case insts of
