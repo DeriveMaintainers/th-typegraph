@@ -183,7 +183,7 @@ deriveToJSON' opts typeq =
       where
         classType = conT ''ToJSON
         typeNames = map tvbName tvbs
-        instanceType = subst <$> (foldl' appT (conT name) $ map varT typeNames)
+        instanceType = subst <$> foldl' appT (conT name) (map varT typeNames)
 
 -- | Generates a lambda expression which encodes the given data type as JSON.
 mkToJSON :: Options -- ^ Encoding options.
@@ -398,7 +398,7 @@ deriveFromJSON' opts typeq =
       where
         classType = conT ''FromJSON
         typeNames = map tvbName tvbs
-        instanceType = foldl' appT (conT name) $ map varT typeNames
+        instanceType = subst <$> foldl' appT (conT name) (map varT typeNames)
 
 -- | Generates a lambda expression which parses the JSON encoding of the given
 -- data type.
