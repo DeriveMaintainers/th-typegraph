@@ -1138,7 +1138,7 @@ withType typeq f =
 #endif
         withBindings tvbs tparams
           (\unbound subst -> do
-             insts' <- reifyInstances fname (map (subst . VarT . toName) tvbs ++ unbound)
+             insts' <- reifyInstances fname (map subst (map (VarT . toName) tvbs ++ unbound))
              case insts' of
 #if MIN_VERSION_template_haskell(2,11,0)
                [DataInstD _ _fname instTys _ cons _] -> f fname tvbs cons (Just instTys) unbound subst

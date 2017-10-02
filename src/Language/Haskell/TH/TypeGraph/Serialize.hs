@@ -49,7 +49,7 @@ deriveSerialize' typ0 = do
 #endif
         withBindings vars vals
           (\unbound subst -> do
-             insts <- reifyInstances famname (map (subst . VarT . toName) vars ++ unbound)
+             insts <- reifyInstances famname (map subst (map (VarT . toName) vars ++ unbound))
              case insts of
 #if MIN_VERSION_template_haskell(2,11,0)
                [DataInstD _ _famname vals' _ cons _] ->
