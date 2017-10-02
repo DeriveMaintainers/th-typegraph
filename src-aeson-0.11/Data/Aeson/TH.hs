@@ -196,21 +196,21 @@ deriveToJSON opts name = deriveToJSON' opts (conT name)
 
 deriveToJSON' :: Options -> TypeQ -> Q [Dec]
 deriveToJSON' opts typeq =
-    withType typeq $ \name' tvbs cons mbTys subst -> fmap (:[]) $ fromCons name' tvbs cons mbTys subst
+    withType typeq $ \name' tvbs cons mbTys unbound subst -> fmap (:[]) $ fromCons name' tvbs cons mbTys unbound subst
   where
-    fromCons :: Name -> [TyVarBndr] -> [Con] -> Maybe [Type] -> (Type -> Type) -> Q Dec
-    fromCons name' tvbs cons mbTys subst = do
-        (instanceCxt, instanceType) <- buildTypeInstance name' ''ToJSON tvbs mbTys subst
+    fromCons :: Name -> [TyVarBndr] -> [Con] -> Maybe [Type] -> [Type] -> (Type -> Type) -> Q Dec
+    fromCons name' tvbs cons mbTys unbound subst = do
+        (instanceCxt, instanceType) <- buildTypeInstance name' ''ToJSON tvbs mbTys unbound subst
         instanceD (return instanceCxt)
                   (return instanceType)
                   [ funD 'toJSON
                          [ clause []
-                                  (normalB $ consToValue opts cons subst)
+                                  (normalB $ consToValue opts cons unbound subst)
                                   []
                          ]
                   , funD 'toEncoding
                          [ clause []
-                                  (normalB $ consToEncoding opts cons subst)
+                                  (normalB $ consToEncoding opts cons unbound subst)
                                   []
                          ]
                   ]
@@ -230,7 +230,7 @@ mkToEncoding :: Options -- ^ Encoding options.
              -> Q Exp
 mkToEncoding opts name = mkToEncoding' opts (conT name)
 
-mkToEncoding' opts typeq = withType typeq (\_ _ cons _ subst -> consToEncoding opts cons subst)
+mkToEncoding' opts typeq = withType typeq (\_ _ cons _ unbound subst -> consToEncoding opts cons unbound subst)
 
 -- | Helper function used by both 'deriveToJSON' and 'mkToJSON'. Generates
 -- code to generate a 'Value' of a number of constructors. All constructors
@@ -239,19 +239,19 @@ consToValue :: Options
            -- ^ Encoding options.
            -> [Con]
            -- ^ Constructors for which to generate JSON generating code.
-           -> (Type -> Type)
+           -> [Type] -> (Type -> Type)
            -> Q Exp
 
-consToValue _ [] _ = error $ "Data.Aeson.TH.consToValue: "
+consToValue _ [] _ _ = error $ "Data.Aeson.TH.consToValue: "
                           ++ "Not a single constructor given!"
 
 -- A single constructor is directly encoded. The constructor itself may be
 -- forgotten.
-consToValue opts [con] subst = do
+consToValue opts [con] unbound subst = do
     value <- newName "value"
-    lam1E (varP value) $ caseE (varE value) [argsToValue opts False con subst]
+    lam1E (varP value) $ caseE (varE value) [argsToValue opts False con unbound subst]
 
-consToValue opts cons subst = do
+consToValue opts cons unbound subst = do
     value <- newName "value"
     lam1E (varP value) $ caseE (varE value) matches
   where
@@ -261,7 +261,7 @@ consToValue opts cons subst = do
               | con <- cons
               , let conName = getConName con
               ]
-        | otherwise = [argsToValue opts True con subst | con <- cons]
+        | otherwise = [argsToValue opts True con unbound subst | con <- cons]
 
 conStr :: Options -> Name -> Q Exp
 conStr opts = appE [|String|] . conTxt opts
@@ -279,21 +279,21 @@ consToEncoding :: Options
                   -- ^ Encoding options.
                -> [Con]
                -- ^ Constructors for which to generate JSON generating code.
-               -> (Type -> Type)
+               -> [Type] -> (Type -> Type)
                -> Q Exp
 
-consToEncoding _ [] _ = error $ "Data.Aeson.TH.consToEncoding: "
+consToEncoding _ [] _ _ = error $ "Data.Aeson.TH.consToEncoding: "
                       ++ "Not a single constructor given!"
 
 -- A single constructor is directly encoded. The constructor itself may be
 -- forgotten.
-consToEncoding opts [con] subst = do
+consToEncoding opts [con] unbound subst = do
     value <- newName "value"
     lam1E (varP value) $ caseE (varE value) [argsToEncoding opts False con]
 
 -- Encode just the name of the constructor of a sum type iff all the
 -- constructors are nullary.
-consToEncoding opts cons subst = do
+consToEncoding opts cons unbound subst = do
     value <- newName "value"
     lam1E (varP value) $ caseE (varE value) matches
   where
@@ -333,17 +333,17 @@ sumToValue opts multiCons conName exp
     | otherwise = exp
 
 -- | Generates code to generate the JSON encoding of a single constructor.
-argsToValue :: Options -> Bool -> Con -> (Type -> Type) -> Q Match
+argsToValue :: Options -> Bool -> Con -> [Type] -> (Type -> Type) -> Q Match
 -- Nullary constructors. Generates code that explicitly matches against the
 -- constructor even though it doesn't contain data. This is useful to prevent
 -- type errors.
-argsToValue  opts multiCons (NormalC conName []) subst =
+argsToValue  opts multiCons (NormalC conName []) unbound subst =
     match (conP conName [])
           (normalB (sumToValue opts multiCons conName [e|toJSON ([] :: [()])|]))
           []
 
 -- Polyadic constructors with special case for unary constructors.
-argsToValue opts multiCons (NormalC conName ts) subst = do
+argsToValue opts multiCons (NormalC conName ts) unbound subst = do
     let len = length ts
     args <- mapM newName ["arg" ++ show n | n <- [1..len]]
     js <- case [[|toJSON|] `appE` varE arg | arg <- args] of
@@ -371,8 +371,8 @@ argsToValue opts multiCons (NormalC conName ts) subst = do
           []
 
 -- Records.
-argsToValue opts multiCons (RecC conName ts) subst = case (unwrapUnaryRecords opts, not multiCons, ts) of
-  (True,True,[(_,st,ty)]) -> argsToValue opts multiCons (NormalC conName [(st,ty)]) subst
+argsToValue opts multiCons (RecC conName ts) unbound subst = case (unwrapUnaryRecords opts, not multiCons, ts) of
+  (True,True,[(_,st,ty)]) -> argsToValue opts multiCons (NormalC conName [(st,ty)]) unbound subst
   _ -> do
     args <- mapM newName ["arg" ++ show n | (_, n) <- zip ts [1 :: Integer ..]]
     let exp = [|A.object|] `appE` pairs
@@ -425,7 +425,7 @@ argsToValue opts multiCons (RecC conName ts) subst = case (unwrapUnaryRecords op
           ) []
 
 -- Infix constructors.
-argsToValue opts multiCons (InfixC _ conName _) subst = do
+argsToValue opts multiCons (InfixC _ conName _) unbound subst = do
     al <- newName "argL"
     ar <- newName "argR"
     match (infixP (varP al) conName (varP ar))
@@ -437,16 +437,16 @@ argsToValue opts multiCons (InfixC _ conName _) subst = do
           )
           []
 -- Existentially quantified constructors.
-argsToValue opts multiCons (ForallC _ _ con) subst =
-    argsToValue opts multiCons con subst
+argsToValue opts multiCons (ForallC _ _ con) unbound subst =
+    argsToValue opts multiCons con unbound subst
 
 #if MIN_VERSION_template_haskell(2,11,0)
 -- GADTs.
-argsToValue opts multiCons (GadtC conNames ts _) subst =
-    argsToValue opts multiCons (NormalC (head conNames) ts) subst
+argsToValue opts multiCons (GadtC conNames ts _) unbound subst =
+    argsToValue opts multiCons (NormalC (head conNames) ts) unbound subst
 
-argsToValue opts multiCons (RecGadtC conNames ts _) subst =
-    argsToValue opts multiCons (RecC (head conNames) ts) subst
+argsToValue opts multiCons (RecGadtC conNames ts _) unbound subst =
+    argsToValue opts multiCons (RecC (head conNames) ts) unbound subst
 #endif
 
 isMaybe :: (a, (b, c, Type)) -> Bool
@@ -607,16 +607,16 @@ deriveFromJSON :: Options
 deriveFromJSON opts name = deriveFromJSON' opts (conT name)
 
 deriveFromJSON' opts typeq =
-    withType typeq $ \name' tvbs cons mbTys subst -> fmap (:[]) $ fromCons name' tvbs cons mbTys subst
+    withType typeq $ \name' tvbs cons mbTys unbound subst -> fmap (:[]) $ fromCons name' tvbs cons mbTys unbound subst
   where
-    fromCons :: Name -> [TyVarBndr] -> [Con] -> Maybe [Type] -> (Type -> Type) -> Q Dec
-    fromCons name' tvbs cons mbTys subst = do
-        (instanceCxt, instanceType) <- buildTypeInstance name' ''FromJSON tvbs mbTys subst
+    fromCons :: Name -> [TyVarBndr] -> [Con] -> Maybe [Type] -> [Type] -> (Type -> Type) -> Q Dec
+    fromCons name' tvbs cons mbTys unbound subst = do
+        (instanceCxt, instanceType) <- buildTypeInstance name' ''FromJSON tvbs mbTys unbound subst
         instanceD (return instanceCxt)
                   (return instanceType)
                   [ funD 'parseJSON
                          [ clause []
-                                  (normalB $ consFromJSON name' opts cons subst)
+                                  (normalB $ consFromJSON name' opts cons unbound subst)
                                   []
                          ]
                   ]
@@ -628,7 +628,7 @@ mkParseJSON :: Options -- ^ Encoding options.
             -> Q Exp
 mkParseJSON opts name = mkParseJSON' opts (conT name)
 mkParseJSON' opts typeq =
-    withType typeq (\name' _ cons _ subst -> consFromJSON name' opts cons subst)
+    withType typeq (\name' _ cons _ unbound subst -> consFromJSON name' opts cons unbound subst)
 
 -- | Helper function used by both 'deriveFromJSON' and 'mkParseJSON'. Generates
 -- code to parse the JSON encoding of a number of constructors. All constructors
@@ -639,17 +639,17 @@ consFromJSON :: Name
              -- ^ Encoding options
              -> [Con]
              -- ^ Constructors for which to generate JSON parsing code.
-             -> (Type -> Type)
+             -> [Type] -> (Type -> Type)
              -> Q Exp
 
-consFromJSON _ _ [] _ = error $ "Data.Aeson.TH.consFromJSON: "
+consFromJSON _ _ [] _ _ = error $ "Data.Aeson.TH.consFromJSON: "
                               ++ "Not a single constructor given!"
 
-consFromJSON tName opts [con] subst = do
+consFromJSON tName opts [con] unbound subst = do
   value <- newName "value"
-  lam1E (varP value) (parseArgs tName opts con (Right value) subst)
+  lam1E (varP value) (parseArgs tName opts con (Right value) unbound subst)
 
-consFromJSON tName opts cons subst = do
+consFromJSON tName opts cons unbound subst = do
   value <- newName "value"
   lam1E (varP value) $ caseE (varE value) $
     if allNullaryToStringTag opts && all isNullary cons
@@ -798,7 +798,7 @@ consFromJSON tName opts cons subst = do
                                                      [|(==)|]
                                                      ([|T.pack|] `appE`
                                                         conNameExp opts con)
-                             e <- parseArgs tName opts con contents subst
+                             e <- parseArgs tName opts con contents unbound subst
                              return (g, e)
                         | con <- cons
                         ]
@@ -884,31 +884,31 @@ parseArgs :: Name -- ^ Name of the type to which the constructor belongs.
           -> Con -- ^ Constructor for which to generate JSON parsing code.
           -> Either (String, Name) Name -- ^ Left (valFieldName, objName) or
                                         --   Right valName
-          -> (Type -> Type)
+          -> [Type] -> (Type -> Type)
           -> Q Exp
 -- Nullary constructors.
-parseArgs tName _ (NormalC conName []) (Left (valFieldName, obj)) subst =
+parseArgs tName _ (NormalC conName []) (Left (valFieldName, obj)) unbound subst =
   getValField obj valFieldName $ parseNullaryMatches tName conName
-parseArgs tName _ (NormalC conName []) (Right valName) subst =
+parseArgs tName _ (NormalC conName []) (Right valName) unbound subst =
   caseE (varE valName) $ parseNullaryMatches tName conName
 
 -- Unary constructors.
-parseArgs _ _ (NormalC conName [_]) (Left (valFieldName, obj)) subst =
+parseArgs _ _ (NormalC conName [_]) (Left (valFieldName, obj)) unbound subst =
   getValField obj valFieldName $ parseUnaryMatches conName
-parseArgs _ _ (NormalC conName [_]) (Right valName) subst =
+parseArgs _ _ (NormalC conName [_]) (Right valName) unbound subst =
   caseE (varE valName) $ parseUnaryMatches conName
 
 -- Polyadic constructors.
-parseArgs tName _ (NormalC conName ts) (Left (valFieldName, obj)) subst =
+parseArgs tName _ (NormalC conName ts) (Left (valFieldName, obj)) unbound subst =
     getValField obj valFieldName $ parseProduct tName conName $ genericLength ts
-parseArgs tName _ (NormalC conName ts) (Right valName) subst =
+parseArgs tName _ (NormalC conName ts) (Right valName) unbound subst =
     caseE (varE valName) $ parseProduct tName conName $ genericLength ts
 
 -- Records.
-parseArgs tName opts (RecC conName ts) (Left (_, obj)) subst =
+parseArgs tName opts (RecC conName ts) (Left (_, obj)) unbound subst =
     parseRecord opts tName conName ts obj
-parseArgs tName opts (RecC conName ts) (Right valName) subst = case (unwrapUnaryRecords opts,ts) of
-  (True,[(_,st,ty)])-> parseArgs tName opts (NormalC conName [(st,ty)]) (Right valName) subst
+parseArgs tName opts (RecC conName ts) (Right valName) unbound subst = case (unwrapUnaryRecords opts,ts) of
+  (True,[(_,st,ty)])-> parseArgs tName opts (NormalC conName [(st,ty)]) (Right valName) unbound subst
   _ -> do
     obj <- newName "recObj"
     caseE (varE valName)
@@ -918,15 +918,15 @@ parseArgs tName opts (RecC conName ts) (Right valName) subst = case (unwrapUnary
 
 -- Infix constructors. Apart from syntax these are the same as
 -- polyadic constructors.
-parseArgs tName _ (InfixC _ conName _) (Left (valFieldName, obj)) subst =
+parseArgs tName _ (InfixC _ conName _) (Left (valFieldName, obj)) unbound subst =
     getValField obj valFieldName $ parseProduct tName conName 2
-parseArgs tName _ (InfixC _ conName _) (Right valName) subst =
+parseArgs tName _ (InfixC _ conName _) (Right valName) unbound subst =
     caseE (varE valName) $ parseProduct tName conName 2
 
 -- Existentially quantified constructors. We ignore the quantifiers
 -- and proceed with the contained constructor.
-parseArgs tName opts (ForallC _ _ con) contents subst =
-    parseArgs tName opts con contents subst
+parseArgs tName opts (ForallC _ _ con) contents unbound subst =
+    parseArgs tName opts con contents unbound subst
 
 #if MIN_VERSION_template_haskell(2,11,0)
 -- GADTs. We ignore the refined return type and proceed as if it were a
@@ -1075,7 +1075,7 @@ parseTypeMismatch' conName tName expected actual =
 
 -- Any other value will result in an exception.
 withType :: TypeQ
-         -> (Name -> [TyVarBndr] -> [Con] -> Maybe [Type] -> (Type -> Type) -> Q a)
+         -> (Name -> [TyVarBndr] -> [Con] -> Maybe [Type] -> [Type] -> (Type -> Type) -> Q a)
          -- ^ Function that generates the actual code. Will be applied
          -- to the datatype/data family 'Name', type variable binders and
          -- constructors extracted from the given 'Name'. If the 'Name' is
@@ -1090,11 +1090,11 @@ withType typeq f =
       goInfo name tparams (TyConI dec) =
         case dec of
 #if MIN_VERSION_template_haskell(2,11,0)
-          DataD    _ _ tvbs _ cons _ -> withBindings tparams tvbs (f name tvbs cons Nothing)
-          NewtypeD _ _ tvbs _ con  _ -> withBindings tparams tvbs (f name tvbs [con] Nothing)
+          DataD    _ _ tvbs _ cons _ -> withBindings tvbs tparams (f name tvbs cons Nothing)
+          NewtypeD _ _ tvbs _ con  _ -> withBindings tvbs tparams (f name tvbs [con] Nothing)
 #else
-          DataD    _ _ tvbs   cons _ -> withBindings tparams tvbs (f name tvbs cons Nothing)
-          NewtypeD _ _ tvbs   con  _ -> withBindings tparams tvbs (f name tvbs [con] Nothing)
+          DataD    _ _ tvbs   cons _ -> withBindings tvbs tparams (f name tvbs cons Nothing)
+          NewtypeD _ _ tvbs   con  _ -> withBindings tvbs tparams (f name tvbs [con] Nothing)
 #endif
           other -> error $ "deriveJSON - Unsupported type: " ++ show other
 #if MIN_VERSION_template_haskell(2,11,0)
@@ -1120,11 +1120,11 @@ withType typeq f =
                   _ -> error $ "deriveJSON - Must be a data or newtype instance."
              in case instDec of
 #if MIN_VERSION_template_haskell(2,11,0)
-                  Just (DataInstD    _ _ instTys _ cons _) -> withBindings tparams tvbs (f parentName tvbs cons (Just instTys))
-                  Just (NewtypeInstD _ _ instTys _ con  _) -> withBindings tparams tvbs (f parentName tvbs [con] (Just instTys))
+                  Just (DataInstD    _ _ instTys _ cons _) -> withBindings tvbs tparams (f parentName tvbs cons (Just instTys))
+                  Just (NewtypeInstD _ _ instTys _ con  _) -> withBindings tvbs tparams (f parentName tvbs [con] (Just instTys))
 #else
-                  Just (DataInstD    _ _ instTys   cons _) -> withBindings tparams tvbs (f parentName tvbs cons (Just instTys))
-                  Just (NewtypeInstD _ _ instTys   con  _) -> withBindings tparams tvbs (f parentName tvbs [con] (Just instTys))
+                  Just (DataInstD    _ _ instTys   cons _) -> withBindings tvbs tparams (f parentName tvbs cons (Just instTys))
+                  Just (NewtypeInstD _ _ instTys   con  _) -> withBindings tvbs tparams (f parentName tvbs [con] (Just instTys))
 #endif
                   _ -> error $ "deriveJSON - Could not find data or newtype instance constructor."
           info -> error $ "deriveJSON - Data constructor " ++ show name ++
@@ -1136,16 +1136,16 @@ withType typeq f =
 #else
       goInfo name tparams (FamilyI (FamilyD DataFam fname tvbs mkind) insts) =
 #endif
-        withBindings tparams tvbs
-          (\subst -> do
-             insts' <- reifyInstances fname (map (subst . VarT . toName) tvbs)
+        withBindings tvbs tparams
+          (\unbound subst -> do
+             insts' <- reifyInstances fname (map (subst . VarT . toName) tvbs ++ unbound)
              case insts' of
 #if MIN_VERSION_template_haskell(2,11,0)
-               [DataInstD _ _fname instTys _ cons _] -> f fname tvbs cons (Just instTys) subst
-               [NewtypeInstD _ _fname instTys _ con _] -> f fname tvbs [con] (Just instTys) subst
+               [DataInstD _ _fname instTys _ cons _] -> f fname tvbs cons (Just instTys) unbound subst
+               [NewtypeInstD _ _fname instTys _ con _] -> f fname tvbs [con] (Just instTys) unbound subst
 #else
-               [DataInstD _ _fname instTys cons _] -> f fname tvbs cons (Just instTys) subst
-               [NewtypeInstD _ _fname instTys con _] -> f fname tvbs [con] (Just instTys) subst
+               [DataInstD _ _fname instTys cons _] -> f fname tvbs cons (Just instTys) unbound subst
+               [NewtypeInstD _ _fname instTys con _] -> f fname tvbs [con] (Just instTys) unbound subst
 #endif
                _ -> error $ "deriveJSON - Could not find data family instance: " ++ show (compose (ConT fname : tparams)) ++ "\n  insts=" ++ show insts)
       goInfo _ _ _ = error $ "deriveJSON - I need the name of a plain data type constructor, "
@@ -1161,7 +1161,7 @@ buildTypeInstance :: Name
                   -> Maybe [Type]
                   -- ^ 'Just' the types used to instantiate a data family instance,
                   -- or 'Nothing' if it's a plain data type
-                  -> (Type -> Type)
+                  -> [Type] -> (Type -> Type)
                   -- ^ Type variable bindings
                   -> Q (Cxt, Type)
                   -- ^ The resulting 'Cxt' and 'Type' to use in a class instance
@@ -1266,9 +1266,9 @@ buildTypeInstanceFromTys :: Name
                          -- ^ The types to instantiate the instance with
                          -> Bool
                          -- ^ True if it's a data family, False otherwise
-                         -> (Type -> Type)
+                         -> [Type] -> (Type -> Type)
                          -> Q (Cxt, Type)
-buildTypeInstanceFromTys tyConName constraint varTysOrig isDataFamily subst = do
+buildTypeInstanceFromTys tyConName constraint varTysOrig isDataFamily unbound subst = do
     -- Make sure to expand through type/kind synonyms! Otherwise, we won't
     -- be able to infer constraints as accurately.
     varTysExp <- mapM expandSyn varTysOrig
@@ -1289,7 +1289,7 @@ buildTypeInstanceFromTys tyConName constraint varTysOrig isDataFamily subst = do
 
         instanceType :: Type
         instanceType = AppT (ConT constraint)
-                     $ applyTyCon tyConName varTys
+                     $ applyTyCon tyConName (varTys ++ unbound)
 
     return (instanceCxt, subst instanceType)
 

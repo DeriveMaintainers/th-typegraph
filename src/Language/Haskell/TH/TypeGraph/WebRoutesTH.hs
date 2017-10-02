@@ -116,12 +116,13 @@ parseInfo name vals
           doDec (DataD cx _ keys cs _) = return $ Tagged (map conInfo cs) cx $ map (VarT . toName) keys
           doDec (NewtypeD cx _ keys con _) = return $ Tagged [conInfo con] cx $ map (VarT . toName) keys
           doDec (FamilyD DataFam fname keys _) =
-              withBindings vals keys
-                (\subst -> do insts <- reifyInstances fname (map (subst . VarT . toName) keys)
-                              case insts of
-                                [DataInstD cx _fname vals' cs _] ->
-                                    return $ Tagged (map conInfo cs) cx $ map (subst . VarT . toName) keys
-                                [] -> error $ "derivePathInfo - data family instance " ++ show fname ++ " could not be reified:\n " ++ pprint (compose (ConT name : vals)))
+              withBindings keys vals
+                (\unbound subst -> do
+                   insts <- reifyInstances fname (map (subst . VarT . toName) keys ++ unbound)
+                   case insts of
+                     [DataInstD cx _fname vals' cs _] ->
+                       return $ Tagged (map conInfo cs) cx $ map (subst . VarT . toName) keys
+                     [] -> error $ "derivePathInfo - data family instance " ++ show fname ++ " could not be reified:\n " ++ pprint (compose (ConT name : vals)))
 #endif
           doDec dec  = error $ "derivePathInfo - invalid input: " ++ show dec
           conInfo (NormalC n args) = (n, length args)

@@ -47,7 +47,7 @@ monomorphize typq = typq >>= \typ0 -> go typ0 $ decompose typ0
       -- function.  Therefore we do not bind them to the vals
       -- argument, they are unified with each instance.
       goDec vals (TySynD _tname vars typ) =
-          withBindings vals vars (\subst -> go (subst typ) (decompose typ))
+          withBindings vars vals (\unbound subst -> go (subst typ) (decompose typ ++ unbound))
 #if MIN_VERSION_template_haskell(2,11,0)
       goDec vals (DataFamilyD fname fvars mkind) = do
 #else
@@ -69,7 +69,7 @@ monomorphize typq = typq >>= \typ0 -> go typ0 $ decompose typ0
                -- applying VarT to the extra variables.
                let vals' = vals ++ map (VarT . toName) (drop (length vals) vars) in
                -- Build the monomorphic type and apply substitutions
-               withBindings vals vars (\subst -> return (subst (compose (typ : vals'))))
+               withBindings vars vals (\unbound subst -> return (subst (compose (typ : vals'))))
 
 deriveConstraints :: Int -> Name -> Name -> [Type] -> Q (Set Pred)
 deriveConstraints verbosity0 constraint tyConName varTysExp = do
@@ -90,17 +90,17 @@ deriveConstraints verbosity0 constraint tyConName varTysExp = do
                    pprint constraint ++
                    " (" ++ pprint (compose (ConT tyConName : varTysExp)) ++ ")")
         local (\r -> r {prefix = " " ++ prefix r}) $
-          goType (compose (ConT tyConName : varTysExp))
+          goType [] (compose (ConT tyConName : varTysExp))
 
-      goType :: Type -> RWST R (Set Pred) (Set Type) Q ()
-      goType typ = do
+      goType :: [Type] -> Type -> RWST R (Set Pred) (Set Type) Q ()
+      goType vals typ = do
         visited <- get
         when (not (Set.member typ visited)) $ do
           modify (Set.insert typ)
           message 1 ("goType " ++ pprint typ)
           local (\r -> r {prefix = " " ++ prefix r}) $ do
             message 1 ("ts=" ++ show (decompose typ))
-            goApply (decompose typ)
+            goApply (decompose typ ++ vals)
 
       -- Process an unvisited type whose applications have been decomposed
       goApply :: [Type] -> RWST R (Set Pred) (Set Type) Q ()
@@ -120,8 +120,8 @@ deriveConstraints verbosity0 constraint tyConName varTysExp = do
       -- it indicates whether the type is monomorphic.)
       goApply [SigT typ _kind] = goApply (decompose typ)
       -- goApplied [SigT _typ kind] = return ()
-      goApply [ListT, val] = goType val
-      goApply (TupleT _ : types) = mapM_ goType types
+      goApply [ListT, val] = goType [] val
+      goApply (TupleT _ : types) = mapM_ (goType []) types
       goApply (ConT tname : vals) = do
         info <- lift (reify tname)
         message 1 ("info=" ++ show info)
@@ -131,20 +131,21 @@ deriveConstraints verbosity0 constraint tyConName varTysExp = do
 
       goInfo :: [Type] -> Info -> RWST R (Set Pred) (Set Type) Q ()
       goInfo vals (TyConI (TySynD _tname vars typ)) =
-        withBindings vals vars (\subst -> goType (subst typ))
+        withBindings vars vals (\unbound subst -> goType unbound (subst typ))
       goInfo _vals (PrimTyConI _ _ _) = return ()
       goInfo vals (TyConI dec) =
           let (vars, cons) = decInfo dec in
-          withBindings vals vars (\subst -> mapM_ (goCon subst) cons)
+          withBindings vars vals (\unbound subst -> mapM_ (goCon unbound subst) cons)
       goInfo vals (FamilyI fam _insts) =
           let (famname, vars) = famInfo fam in
-          withBindings vals vars
-            (\subst -> do let typ = subst (compose (ConT famname : fmap (VarT . toName) vars))
-                          params <- paramNames <$> ask
-                          message 1 ("paramNames=" ++ show params)
-                          message 1 ("typ=" ++ show typ)
-                          let p = AppT (ConT constraint) typ
-                          tell (Set.singleton p)
+          withBindings vars vals
+            (\unbound subst -> do
+               let typ = subst (compose (ConT famname : fmap (VarT . toName) vars ++ unbound))
+               params <- paramNames <$> ask
+               message 1 ("paramNames=" ++ show params)
+               message 1 ("typ=" ++ show typ)
+               let p = AppT (ConT constraint) typ
+               tell (Set.singleton p)
 {-
                           if any (`Set.member` params) (gFind typ :: [Name])
                           then do
@@ -172,37 +173,40 @@ deriveConstraints verbosity0 constraint tyConName varTysExp = do
 #endif
       famInfo fam = error $ "unexpected Dec: " ++ pprint1 fam
 
-      goCon :: (Type -> Type) -> Con -> RWST R (Set Pred) (Set Type) Q ()
-      goCon subst (ForallC _ _ con) =
-          goCon subst con
-      goCon subst (NormalC _cname sts) =
-          mapM_ (goField subst . snd) sts
-      goCon subst (RecC _cname vsts) =
-          mapM_ (goField subst . (\(_,_,x) -> x)) vsts
-      goCon subst (InfixC lhs _cname rhs) = do
-          goField subst (snd lhs)
-          goField subst (snd rhs)
+      goCon :: [Type] -> (Type -> Type) -> Con -> RWST R (Set Pred) (Set Type) Q ()
+      goCon vals subst (ForallC _ _ con) =
+          goCon vals subst con
+      goCon vals subst (NormalC _cname sts) =
+          mapM_ (goField vals subst . snd) sts
+      goCon vals subst (RecC _cname vsts) =
+          mapM_ (goField vals subst . (\(_,_,x) -> x)) vsts
+      goCon vals subst (InfixC lhs _cname rhs) = do
+          goField vals subst (snd lhs)
+          goField vals subst (snd rhs)
 
       -- goField :: Data a => Name -> (a -> a) -> Int -> Int -> Name -> Type -> WriterT (Set Pred) Q ()
-      goField subst ftype = goType (subst ftype)
+      goField vals subst ftype = goType vals (subst ftype)
 
 -- | Input is a list of type variable bindings (such as those
 -- appearing in a Dec) and the current stack of type parameters
 -- applied by AppT.  Builds a function that expands a type using those
 -- bindings and pass it to an action.
-withBindings :: (Monad m, Data a) => [Type] -> [TyVarBndr] -> ((a -> a) -> m r) -> m r
-withBindings vals vars action = do
+withBindings :: (Monad m, Data a) => [TyVarBndr] -> [Type] -> ([Type] -> (a -> a) -> m r) -> m r
+withBindings vars vals action = do
   -- when (length vals < length vars)
   --   (error $ "doInfo - arity mismatch:\n\tvars=" ++ show vars ++
   --            "\n\tparams=" ++ show vals)
   let subst :: forall a. Data a => a -> a
       subst = substG bindings
+      -- If there are more values than variables pass the extra
+      -- unbound values to action.
+      (vals', unbound) = splitAt (length vars) vals
       -- Make the type monomorphic by using the variable list to
       -- extend the list of values as necessary with self bindings.
       -- This prevents the arity mismatch error commented out above.
-      vals' = vals ++ map (VarT . toName) (drop (length vals) vars)
-      bindings = Map.fromList (zip (fmap toName vars) vals')
-  action subst
+      vals'' = vals' ++ map (VarT . toName) (drop (length vals') vars)
+      bindings = Map.fromList (zip (fmap toName vars) vals'')
+  action unbound subst
     where
       -- Build a generic substitution function
       substG :: forall a. Data a => Map Name Type -> a -> a
