@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -15,9 +16,6 @@ import Language.Haskell.TH.TypeGraph.Serialize (deriveSerialize)
 import Language.Haskell.TH.TypeGraph.TypeTraversal (pprint1)
 import Language.Haskell.TH.TypeGraph.WebRoutesTH (derivePathInfo)
 import Prelude hiding (concat)
-import "th-typegraph" Data.Aeson.TH
---import Data.Generics
---import Data.Monoid (mconcat)
 import Test.HUnit
 
 import Types
@@ -56,6 +54,7 @@ tests = do
         (assertEqual "derivePathInfo (ProxyType TestPaths)"
            ("instance PathInfo (ProxyType TestPaths) where toPathSegments inp = case inp of P_Eitherz20UURIz20UInteger -> [pack \"p_-eitherz20-u-u-r-iz20-u-integer\"] P_Int -> [pack \"p_-int\"] P_Integer -> [pack \"p_-integer\"] P_Loc -> [pack \"p_-loc\"] P_Maybez20UURIAuth -> [pack \"p_-maybez20-u-u-r-i-auth\"] P_Maybez20UZLEitherz20UURIz20UIntegerZR -> [pack \"p_-maybez20-u-z-l-eitherz20-u-u-r-iz20-u-integer-z-r\"] P_Name -> [pack \"p_-name\"] P_TyLit -> [pack \"p_-ty-lit\"] P_TyVarBndr -> [pack \"p_-ty-var-bndr\"] P_Type -> [pack \"p_-type\"] P_URI -> [pack \"p_-u-r-i\"] P_URIAuth -> [pack \"p_-u-r-i-auth\"] P_ZLIntz2cUz20UIntZR -> [pack \"p_-z-l-intz2c-uz20-u-int-z-r\"] P_ZLIntz2cUz20UTyVarBndrZR -> [pack \"p_-z-l-intz2c-uz20-u-ty-var-bndr-z-r\"] P_ZLIntz2cUz20UTypeZR -> [pack \"p_-z-l-intz2c-uz20-u-type-z-r\"] P_ZLIntz2cUz20UZMCharZNZR -> [pack \"p_-z-l-intz2c-uz20-u-z-m-char-z-n-z-r\"] P_ZMCharZN -> [pack \"p_-z-m-char-z-n\"] P_ZMIntZN -> [pack \"p_-z-m-int-z-n\"] P_ZMTyVarBndrZN -> [pack \"p_-z-m-ty-var-bndr-z-n\"] P_ZMTypeZN -> [pack \"p_-z-m-type-z-n\"] P_ZMZMCharZNZN -> [pack \"p_-z-m-z-m-char-z-n-z-n\"] fromPathSegments = (<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) ((<|>) (segment (pack \"p_-eitherz20-u-u-r-iz20-u-integer\") >> return P_Eitherz20UURIz20UInteger) (segment (pack \"p_-int\") >> return P_Int)) (segment (pack \"p_-integer\") >> return P_Integer)) (segment (pack \"p_-loc\") >> return P_Loc)) (segment (pack \"p_-maybez20-u-u-r-i-auth\") >> return P_Maybez20UURIAuth)) (segment (pack \"p_-maybez20-u-z-l-eitherz20-u-u-r-iz20-u-integer-z-r\") >> return P_Maybez20UZLEitherz20UURIz20UIntegerZR)) (segment (pack \"p_-name\") >> return P_Name)) (segment (pack \"p_-ty-lit\") >> return P_TyLit)) (segment (pack \"p_-ty-var-bndr\") >> return P_TyVarBndr)) (segment (pack \"p_-type\") >> return P_Type)) (segment (pack \"p_-u-r-i\") >> return P_URI)) (segment (pack \"p_-u-r-i-auth\") >> return P_URIAuth)) (segment (pack \"p_-z-l-intz2c-uz20-u-int-z-r\") >> return P_ZLIntz2cUz20UIntZR)) (segment (pack \"p_-z-l-intz2c-uz20-u-ty-var-bndr-z-r\") >> return P_ZLIntz2cUz20UTyVarBndrZR)) (segment (pack \"p_-z-l-intz2c-uz20-u-type-z-r\") >> return P_ZLIntz2cUz20UTypeZR)) (segment (pack \"p_-z-l-intz2c-uz20-u-z-m-char-z-n-z-r\") >> return P_ZLIntz2cUz20UZMCharZNZR)) (segment (pack \"p_-z-m-char-z-n\") >> return P_ZMCharZN)) (segment (pack \"p_-z-m-int-z-n\") >> return P_ZMIntZN)) (segment (pack \"p_-z-m-ty-var-bndr-z-n\") >> return P_ZMTyVarBndrZN)) (segment (pack \"p_-z-m-type-z-n\") >> return P_ZMTypeZN)) (segment (pack \"p_-z-m-z-m-char-z-n-z-n\") >> return P_ZMZMCharZNZN)" :: String)
            $(derivePathInfo [t|ProxyType TestPaths|] >>= lift . pprint1))
+#if 0
     , TestCase
         (assertEqual "deriveJSON TraversalPath"
            (concat ["instance (ToJSON (KeyType (t :: *)), ToJSON (ProxyType (t :: *))) => ToJSON (TraversalPath t s a) where ",
@@ -74,6 +73,7 @@ tests = do
         (assertEqual "deriveJSON' defaultOptions [t|OldType Schema1 Author|]"
            ("instance ToJSON (OldType Schema1 Author) where toJSON = \\value -> case value of Author_Schema1 arg1 arg2 arg3 arg4 -> Array (create (do {mv <- unsafeNew 4; unsafeWrite mv 0 (toJSON arg1); unsafeWrite mv 1 (toJSON arg2); unsafeWrite mv 2 (toJSON arg3); unsafeWrite mv 3 (toJSON arg4); return mv})) toEncoding = \\value -> case value of Author_Schema1 arg1 arg2 arg3 arg4 -> Encoding (char7 '[' <> ((builder arg1 <> (char7 ',' <> (builder arg2 <> (char7 ',' <> (builder arg3 <> (char7 ',' <> builder arg4)))))) <> char7 ']')) instance FromJSON (OldType Schema1 Author) where parseJSON = \\value -> case value of Array arr -> if length arr == 4 then (((Author_Schema1 <$> parseJSON (arr `unsafeIndex` 0)) <*> parseJSON (arr `unsafeIndex` 1)) <*> parseJSON (arr `unsafeIndex` 2)) <*> parseJSON (arr `unsafeIndex` 3) else parseTypeMismatch' \"Author_Schema1\" \"Types.OldType\" \"Array of length 4\" (\"Array of length \" ++ (show . length) arr) other -> parseTypeMismatch' \"Author_Schema1\" \"Types.OldType\" \"Array\" (valueConName other)" :: String)
            $(deriveJSON' defaultOptions [t|OldType Schema1 Author|] >>= lift . pprint1))
+#endif
     , TestCase
         (assertEqual "derivePathInfo TraversalPath"
            ("instance (PathInfo (KeyType t), PathInfo (ProxyType t)) => PathInfo (TraversalPath t s a) where toPathSegments inp = case inp of TraversalPath arg arg arg -> (++) [pack \"traversal-path\"] ((++) (toPathSegments arg) ((++) (toPathSegments arg) (toPathSegments arg))) fromPathSegments = ap (ap (ap (segment (pack \"traversal-path\") >> return TraversalPath) fromPathSegments) fromPathSegments) fromPathSegments" :: String)
