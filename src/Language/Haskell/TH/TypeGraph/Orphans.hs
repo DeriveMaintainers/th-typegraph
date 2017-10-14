@@ -7,13 +7,6 @@
 
 module Language.Haskell.TH.TypeGraph.Orphans where
 
-import Data.Aeson (FromJSON(parseJSON), Value(Null), ToJSON(toJSON))
-#if MIN_VERSION_aeson(1,0,0)
-import Data.Aeson (ToJSONKey, FromJSONKey)
-#endif
-#if !MIN_VERSION_aeson(0,11,0)
-import Data.Aeson.Types (typeMismatch)
-#endif
 import qualified Data.Graph.Inductive as G
 import Data.Proxy (Proxy(Proxy))
 import Data.Set as Set (Set, toList)
@@ -28,18 +21,6 @@ import Language.Haskell.TH.PprLib (hcat, ptext, vcat)
 import Language.Haskell.TH.Syntax (ModName(..), NameFlavour(..), OccName(..), PkgName(..))
 import Data.SafeCopy (base, contain, deriveSafeCopy, SafeCopy(errorTypeName, getCopy, kind, putCopy, version))
 import Data.Serialize (label, Serialize(..))
-
-#if !MIN_VERSION_aeson(0,11,0)
--- Backport the JSON instances from aeson-0.11.
-instance ToJSON (Proxy a) where
-   toJSON _ = Null
-   {-# INLINE toJSON #-}
-
-instance FromJSON (Proxy a) where
-    {-# INLINE parseJSON #-}
-    parseJSON Null = pure Proxy
-    parseJSON v    = typeMismatch "Proxy" v
-#endif
 
 instance Ppr () where
     ppr () = ptext "()"
@@ -81,11 +62,6 @@ instance Serialize Day where
 instance Serialize DiffTime where
     get = fromRational <$> get
     put = put . toRational
-
-#if MIN_VERSION_aeson(1,0,0)
-instance FromJSONKey UserId
-instance ToJSONKey UserId
-#endif
 
 deriving instance Serialize Loc
 
