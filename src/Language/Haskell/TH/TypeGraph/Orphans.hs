@@ -9,9 +9,12 @@ module Language.Haskell.TH.TypeGraph.Orphans where
 
 import qualified Data.Graph.Inductive as G
 import Data.Proxy (Proxy(Proxy))
+import Data.SafeCopy (base, contain, deriveSafeCopy, SafeCopy(errorTypeName, getCopy, kind, putCopy, version))
+import Data.Serialize (label, Serialize(..))
 import Data.Set as Set (Set, toList)
 import Data.Time (UTCTime(..), Day(ModifiedJulianDay), toModifiedJulianDay, DiffTime)
 import Data.UserId (UserId(..))
+import Extra.Orphans ()
 import Instances.TH.Lift ()
 import Language.Haskell.TH (ExpQ, Loc(..), location, Name, NameSpace, Type)
 import Language.Haskell.TH.Instances ({-instance Lift Loc-})
@@ -19,8 +22,6 @@ import Language.Haskell.TH.Lift (deriveLift, lift)
 import Language.Haskell.TH.Ppr (Ppr(ppr))
 import Language.Haskell.TH.PprLib (hcat, ptext, vcat)
 import Language.Haskell.TH.Syntax (ModName(..), NameFlavour(..), OccName(..), PkgName(..))
-import Data.SafeCopy (base, contain, deriveSafeCopy, SafeCopy(errorTypeName, getCopy, kind, putCopy, version))
-import Data.Serialize (label, Serialize(..))
 
 instance Ppr () where
     ppr () = ptext "()"
@@ -36,13 +37,6 @@ instance Ppr (Set Type, Set Type) where
 instance Ppr (Set Type) where
     ppr s = hcat [ptext "Set.fromList [", ppr (Set.toList s), ptext "]"]
 
-instance SafeCopy (Proxy t) where
-      putCopy Proxy = contain (do { return () })
-      getCopy = contain (label "Data.Proxy.Proxy:" (pure Proxy))
-      version = 0
-      kind = base
-      errorTypeName _ = "Data.Proxy.Proxy"
-
 $(deriveSafeCopy 0 'base ''OccName)
 $(deriveSafeCopy 0 'base ''NameSpace)
 $(deriveSafeCopy 0 'base ''PkgName)
@@ -50,22 +44,3 @@ $(deriveSafeCopy 0 'base ''ModName)
 $(deriveSafeCopy 0 'base ''NameFlavour)
 $(deriveSafeCopy 0 'base ''Name)
 $(deriveSafeCopy 1 'base ''Loc)
-
-instance Serialize UTCTime where
-    get = uncurry UTCTime <$> get
-    put (UTCTime day time) = put (day, time)
-
-instance Serialize Day where
-    get = ModifiedJulianDay <$> get
-    put = put . toModifiedJulianDay
-
-instance Serialize DiffTime where
-    get = fromRational <$> get
-    put = put . toRational
-
-deriving instance Serialize Loc
-
-$(deriveLift ''UserId)
-
-$(deriveLift ''G.Gr)
-$(deriveLift ''G.NodeMap)

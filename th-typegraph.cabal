@@ -32,17 +32,28 @@ library
     Language.Haskell.TH.TypeGraph.WebRoutesTH
     Data.SafeCopy.Derive
   build-depends:
+    attoparsec,
     base >= 4.8 && < 5,
+    bytestring,
     cereal,
     containers,
+    deepseq,
+    dlist,
+    fail,
     fgl,
+    ghc-prim,
+    hashable,
     lens,
     mtl,
     parsec,
     pretty >= 1.1.2,
     safecopy,
+    scientific,
+    semigroups,
     split,
+    sr-extra,
     syb,
+    tagged,
     template-haskell >= 2.10,
     text,
     th-desugar,
@@ -50,21 +61,11 @@ library
     th-lift-instances >= 0.1.7,
     th-orphans,
     time,
-    userid,
-    web-routes,
+    transformers,
     unordered-containers,
+    userid,
     vector,
-    bytestring,
-    scientific,
-    semigroups,
-    deepseq,
-    hashable,
-    fail,
-    dlist,
-    attoparsec,
-    tagged,
-    ghc-prim,
-    transformers
+    web-routes
   include-dirs: include
 
 test-suite th-typegraph-tests
