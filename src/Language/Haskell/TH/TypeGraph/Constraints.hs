@@ -19,7 +19,7 @@ import Data.Map as Map (fromList, lookup, Map)
 import Data.Set as Set (delete, empty, fromList, insert, member, Set, singleton)
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax (Quasi)
-import Language.Haskell.TH.TypeGraph.TypeTraversal (pprint1, toName)
+import Language.Haskell.TH.TypeGraph.Prelude (pprint1, toName)
 
 -- Reader monad type
 data R =

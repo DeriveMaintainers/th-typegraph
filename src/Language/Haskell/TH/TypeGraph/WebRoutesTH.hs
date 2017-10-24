@@ -19,7 +19,7 @@ import Data.Text                     (pack, unpack)
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax    (nameBase)
 import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints, withBindings, compose, decompose)
-import Language.Haskell.TH.TypeGraph.TypeTraversal (toName)
+import Language.Haskell.TH.TypeGraph.Prelude (toName)
 import Text.ParserCombinators.Parsec ((<|>),many1)
 import Web.Routes.PathInfo
 

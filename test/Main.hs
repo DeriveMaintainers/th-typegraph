@@ -8,12 +8,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
--- import Data.Aeson
--- import Language.Haskell.TH.TypeGraph.Aeson (deriveJSON)
 import Language.Haskell.TH.Lift (lift)
 import Language.Haskell.TH.TypeGraph.Constraints (monomorphize)
 import Language.Haskell.TH.TypeGraph.Serialize (deriveSerialize)
-import Language.Haskell.TH.TypeGraph.TypeTraversal (pprint1)
+import Language.Haskell.TH.TypeGraph.Prelude (pprint1)
 import Language.Haskell.TH.TypeGraph.WebRoutesTH (derivePathInfo)
 import Prelude hiding (concat)
 import Test.HUnit

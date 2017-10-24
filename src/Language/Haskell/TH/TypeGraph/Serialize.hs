@@ -12,7 +12,7 @@ import Data.Serialize
 import Data.Set (toList)
 import Language.Haskell.TH.Lift (lift)
 import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints, withBindings)
-import Language.Haskell.TH.TypeGraph.TypeTraversal (toName)
+import Language.Haskell.TH.TypeGraph.Prelude (toName)
 
 deriveSerialize :: TypeQ -> Q [Dec]
 deriveSerialize typq = typq >>= deriveSerialize'

@@ -8,7 +8,7 @@
 module Data.SafeCopy.Derive where
 
 import Language.Haskell.TH.TypeGraph.Phantom (nonPhantom)
-import Language.Haskell.TH.TypeGraph.TypeTraversal (pprint1)
+import Language.Haskell.TH.TypeGraph.Prelude (pprint1)
 import Data.Serialize (getWord8, putWord8, label)
 import Data.SafeCopy
 
@@ -323,7 +323,7 @@ internalDeriveSafeCopy' deriveType versionId kindName typ info = do
 #else
           safeCopyClass args = classP ''SafeCopy args
 #endif
-      in (:[]) <$> instanceD (cxt $ [safeCopyClass [pure typ] | typ <- tyvars'] ++ map return context ++ migrateFromKind ty kindName)
+      in (:[]) <$> instanceD (cxt $ [safeCopyClass [pure typ'] | typ' <- tyvars'] ++ map return context ++ migrateFromKind ty kindName)
                                        (conT ''SafeCopy `appT` ty)
                                        [ mkPutCopy deriveType cons
                                        , mkGetCopy deriveType typ cons

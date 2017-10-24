@@ -14,6 +14,7 @@ module Language.Haskell.TH.TypeGraph.Phantom
 
 import Control.Lens ((%=), _1, makeLenses, over, use, view)
 import Control.Monad.RWS hiding (lift)
+import Language.Haskell.TH.TypeGraph.Prelude (expandType, HasMessageInfo(..), message, pprint1, toName)
 import Language.Haskell.TH.TypeGraph.TypeTraversal
 import Data.Set as Set
 import Language.Haskell.TH
@@ -65,7 +66,6 @@ instance DsMonad m => HasVisitedMap (RWST R () S m) where
         _ -> pure ()
 
 instance DsMonad m => HasTypeTraversal (RWST R () S m) where
-    prepType = return
     doTypeInternal = \typ -> message 1 ("doTypeInternal " ++ show typ) >> local (over prefix' (++ " ")) (doApply typ typ)
     doListT = \typ0 etyp -> message 1 ("doListT " ++ pprint1 typ0) >> doType etyp
     doTupleT = \_ etyp _ -> message 1 ("doTupleT " ++ show etyp) >> doType etyp
