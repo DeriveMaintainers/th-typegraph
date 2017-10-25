@@ -6,6 +6,9 @@ module Language.Haskell.TH.TypeGraph.Prelude
     ( expandType, pprint1, pprint1', pprintW, pprintW'
     , ToName(toName)
     , HasMessageInfo(..), message, indent
+    , composeType
+    , decomposeType
+    -- , unfoldType
     ) where
 
 import Control.Lens (Lens', view)
@@ -86,3 +89,18 @@ message minv s = do
 -- | Indent the lines of a message.
 indent :: String -> String -> String
 indent p s = unlines $ fmap (p ++) (lines s)
+
+decomposeType :: Type -> [Type]
+decomposeType t0 = (go t0 [])
+          where go (AppT t1 t2) ts = go t1 (t2 : ts)
+                go t ts = t : ts
+
+-- | Turn a type parameter list into type applications
+composeType :: [Type] -> Type
+composeType ts = foldl1 AppT ts
+
+-- unfoldType :: Type -> (Type, [Type])
+-- unfoldType t = go t []
+--     where
+--       go (AppT a p) ps = go a (p : ps)
+--       go a ps = (a, ps)
