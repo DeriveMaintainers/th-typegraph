@@ -102,27 +102,16 @@ doInfo _typ0 (PrimTyConI _name _arity _unl) = pure ()
 doInfo _typ0 (TyConI (TySynD _tname binds typ)) =
     runQ (expandType typ) >>= \typ' ->
     withBindings (\subst -> doType (subst typ')) binds
-#if MIN_VERSION_template_haskell(2,11,0)
-doInfo typ0 (TyConI (NewtypeD cx tname binds mk con supers)) =
-    doInfo typ0 (TyConI (DataD cx tname binds mk [con] supers))
-doInfo typ0 (TyConI (DataD _ tname binds _mk cons _supers)) =
+doInfo typ0 (TyConI dec) =
+    let (tname, binds, cons) = decInfo dec in
     withBindings (\subst -> do mapM_ (uncurry (doCon typ0 tname subst (length cons))) (zip [1..] cons)) binds
-#else
-doInfo typ0 (TyConI (NewtypeD cx tname binds con supers)) =
-    doInfo typ0 (TyConI (DataD cx tname binds [con] supers))
-doInfo typ0 (TyConI (DataD _ tname binds cons _supers)) =
-    withBindings (\subst -> do mapM_ (uncurry (doCon typ0 tname subst (length cons))) (zip [1..] cons)) binds
-#endif
 -- Encountered a declaration like data family (ProxyType t).  Call
 -- doVarT on the assumption that ProxyType t is a concrete type.  I'm
 -- not sure if this is the best possible implementation, but its
 -- better than what we have now.
-#if MIN_VERSION_template_haskell(2,11,0)
-doInfo typ0 (FamilyI (DataFamilyD typ binds _mk) _insts) =
-#else
-doInfo typ0 (FamilyI (FamilyD DataFam typ binds _mk) _insts) =
-#endif
-  withBindings (\subst -> doVarT typ0 (subst (foldl AppT (ConT typ) (fmap (VarT . toName) binds)))) binds
+doInfo typ0 (FamilyI dec _insts) =
+  let (tname, binds) = famInfo dec in
+  withBindings (\subst -> doVarT typ0 (subst (foldl AppT (ConT tname) (fmap (VarT . toName) binds)))) binds
 doInfo _ info = error $ "Unexpected info: " ++ pprint1 info ++ "\n\t" ++ show info
 
 doCon :: (HasTypeParameters m, HasTypeTraversal m) => Type -> Name -> (Type -> Type) -> Int -> Int -> Con -> m ()
@@ -185,3 +174,21 @@ withBindings action vars = do
       subst1 :: Map Name Type -> Type -> Type
       subst1 bindings t@(VarT name) = maybe t id (Map.lookup name bindings)
       subst1 _ t = t
+
+decInfo :: Dec -> (Name, [TyVarBndr], [Con])
+#if MIN_VERSION_template_haskell(2,11,0)
+decInfo (NewtypeD _ tname binds _mk con _supers) = (tname, binds, [con])
+decInfo (DataD _ tname binds _mk cons _supers) = (tname, binds, cons)
+#else
+decInfo (NewtypeD _cx tname binds con _supers) = (tname, binds, [con])
+decInfo (DataD _ tname binds cons _supers) = (tname, binds, cons)
+#endif
+decInfo _ = error "decInfo"
+
+famInfo :: Dec -> (Name, [TyVarBndr])
+#if MIN_VERSION_template_haskell(2,11,0)
+famInfo (DataFamilyD typ binds _mk) = (typ, binds)
+#else
+famInfo (FamilyD DataFam typ binds _mk) = (typ, binds)
+#endif
+famInfo _ = error "famInfo"
