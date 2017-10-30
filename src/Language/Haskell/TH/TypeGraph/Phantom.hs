@@ -69,7 +69,7 @@ instance DsMonad m => HasTypeTraversal (RWST R () S m) where
     doTypeInternal = \typ -> message 1 ("doTypeInternal " ++ show typ) >> local (over prefix' (++ " ")) (doApply typ typ)
     doListT = \typ0 etyp -> message 1 ("doListT " ++ pprint1 typ0) >> doType etyp
     doTupleT = \_ etyp _ -> message 1 ("doTupleT " ++ show etyp) >> doType etyp
-    doField = \_t0 _ fi@(FieldInfo {..})  -> message 1 ("doField " ++ show fi) >> doType _fieldType
+    doField = \_t0 tname _cpos cname fpos _mfname ftype -> message 1 ("doField " ++ show (tname, cname, fpos, ppr ftype)) >> doType ftype
     doVarT = \_ typ -> message 1 ("doVarT " ++ pprint1 typ) >> result %= Set.insert typ
 
 nonPhantom :: DsMonad m => Name -> m [Type]

@@ -20,7 +20,6 @@ module Language.Haskell.TH.TypeGraph.TypeTraversal
     , withBindings
     , HasTypeTraversal(..)
     , doApply
-    , FieldInfo(..)
     ) where
 
 import Control.Monad.RWS as Monad hiding (lift)
@@ -39,18 +38,6 @@ class Monad m => HasTypeParameters m where
     pushParam :: Type -> m a -> m a -- ^ Push a parameter
     withParams :: ([Type] -> m ()) -> m ()
 
-data FieldInfo
-    = FieldInfo
-      { _typeName :: Name
-      , _constrCount :: Int
-      , _constrIndex :: Int
-      , _constrName :: Name
-      , _fieldCount :: Int
-      , _fieldIndex :: Int
-      , _fieldName :: Maybe Name
-      , _fieldType :: Type
-      } deriving Show
-
 class (DsMonad m, HasVisitedMap m) => HasTypeTraversal m where
     doTypeInternal :: Type -> m ()
     -- ^ This is passed every type that is encountered.  The methods
@@ -62,7 +49,7 @@ class (DsMonad m, HasVisitedMap m) => HasTypeTraversal m where
     -- ^ When a TupleT type is encountered this is called once for
     -- each element, with the type, element type, and element
     -- position.
-    doField :: Type -> (Type -> Type) -> FieldInfo -> m ()
+    doField :: Type -> Name -> (Int, Int) -> Name -> (Int, Int) -> Maybe Name -> Type -> m ()
     -- ^ When a field is encountered this is called with all the
     -- field info - type name, constructor count/position/name,
     -- field count/position/type/maybe name.
@@ -104,7 +91,7 @@ doInfo _typ0 (TyConI (TySynD _tname binds typ)) =
     withBindings (\subst -> doType (subst typ')) binds
 doInfo typ0 (TyConI dec) =
     let (tname, binds, cons) = decInfo dec in
-    withBindings (\subst -> do mapM_ (uncurry (doCon typ0 tname subst (length cons))) (zip [1..] cons)) binds
+    withBindings (\subst -> do mapM_ (uncurry (doCon typ0 tname subst)) (zip (fmap (,(length cons)) [1..]) cons)) binds
 -- Encountered a declaration like data family (ProxyType t).  Call
 -- doVarT on the assumption that ProxyType t is a concrete type.  I'm
 -- not sure if this is the best possible implementation, but its
@@ -114,44 +101,20 @@ doInfo typ0 (FamilyI dec _insts) =
   withBindings (\subst -> doVarT typ0 (subst (foldl AppT (ConT tname) (fmap (VarT . toName) binds)))) binds
 doInfo _ info = error $ "Unexpected info: " ++ pprint1 info ++ "\n\t" ++ show info
 
-doCon :: (HasTypeParameters m, HasTypeTraversal m) => Type -> Name -> (Type -> Type) -> Int -> Int -> Con -> m ()
-doCon typ0 tname subst cct cpos (ForallC _ _ con) = doCon typ0 tname subst cct cpos con
-doCon typ0 tname subst cct cpos (RecC cname vsts) =
-  mapM_ (\(i, (fname, _, ftype)) ->
+doCon :: (HasTypeParameters m, HasTypeTraversal m) => Type -> Name -> (Type -> Type) -> (Int, Int) -> Con -> m ()
+doCon typ0 tname subst (cpos, cct) (ForallC _ _ con) = doCon typ0 tname subst (cpos, cct) con
+doCon typ0 tname subst (cpos, cct) (RecC cname vsts) =
+  mapM_ (\(fpos, (fname, _, ftype)) ->
              expandType ftype >>= \ftype' ->
-             let fld = FieldInfo { _typeName = tname
-                                 , _constrCount = cct
-                                 , _constrIndex = cpos
-                                 , _constrName = cname
-                                 , _fieldCount = length vsts
-                                 , _fieldIndex = i
-                                 , _fieldName = Just fname
-                                 , _fieldType = subst ftype' } in
-             doField typ0 subst fld) (zip [1..] vsts)
-doCon typ0 tname subst cct cpos (NormalC cname sts) =
-  mapM_ (\(i, (_, ftype)) ->
+             doField typ0 tname (cpos, cct) cname (fpos, length vsts) (Just fname) (subst ftype')) (zip [1..] vsts)
+doCon typ0 tname subst (cpos, cct) (NormalC cname sts) =
+  mapM_ (\(fpos, (_, ftype)) ->
              expandType ftype >>= \ftype' ->
-             let fld = FieldInfo { _typeName = tname
-                                 , _constrCount = cct
-                                 , _constrIndex = cpos
-                                 , _constrName = cname
-                                 , _fieldCount = length sts
-                                 , _fieldIndex = i
-                                 , _fieldName = Nothing
-                                 , _fieldType = subst ftype' } in
-             doField typ0 subst fld) (zip [1..] sts)
-doCon typ0 tname subst cct cpos (InfixC lhs cname rhs) =
-  mapM_ (\(i, (_, ftype)) ->
+             doField typ0 tname (cpos, cct) cname (fpos, length sts) Nothing (subst ftype')) (zip [1..] sts)
+doCon typ0 tname subst (cpos, cct) (InfixC lhs cname rhs) =
+  mapM_ (\(fpos, (_, ftype)) ->
              expandType ftype >>= \ftype' ->
-             let  fld = FieldInfo { _typeName = tname
-                                  , _constrCount = cct
-                                  , _constrIndex = cpos
-                                  , _constrName = cname
-                                  , _fieldCount = 2
-                                  , _fieldIndex = i
-                                  , _fieldName = Nothing
-                                  , _fieldType = subst ftype' } in
-             doField typ0 subst fld) [(1, lhs), (2, rhs)]
+             doField typ0 tname (cpos, cct) cname (fpos, 2) Nothing (subst ftype')) [(1, lhs), (2, rhs)]
 
 -- | Input is a list of type variable bindings (such as those
 -- appearing in a Dec) and the current stack of type parameters
