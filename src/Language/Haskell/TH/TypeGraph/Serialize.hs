@@ -10,22 +10,23 @@ import Language.Haskell.TH
 
 import Data.Serialize
 import Data.Set (toList)
+import Language.Haskell.TH (Loc, location)
 import Language.Haskell.TH.Lift (lift)
 import Language.Haskell.TH.TypeGraph.Constraints (deriveConstraints, withBindings)
 import Language.Haskell.TH.TypeGraph.Prelude (toName)
 
 deriveSerialize :: TypeQ -> Q [Dec]
-deriveSerialize typq = typq >>= deriveSerialize'
+deriveSerialize typq = location >>= \loc -> typq >>= \typ -> deriveSerialize' loc typ
 
-deriveSerialize' :: Type -> Q [Dec]
-deriveSerialize' typ0 = do
+deriveSerialize' :: Loc -> Type -> Q [Dec]
+deriveSerialize' loc typ0 = do
   (: []) <$> goApply typ0 (decompose typ0)
     where
       goApply :: Type -> [Type] -> Q Dec
       goApply typ0 (ConT tname : vals) =
           reify tname >>= goInfo typ0 tname vals
       goApply typ0 (typ : _vals) =
-          error ("deriveSerialize - unexpected type " ++ show typ ++ " (in " ++ show typ0 ++ ")")
+          error (pprint loc ++ ": deriveSerialize - unexpected type " ++ show typ ++ " (in " ++ show typ0 ++ ")")
 
       goInfo :: Type -> Name -> [Type] -> Info -> Q Dec
       goInfo typ0 _tname vals (TyConI (TySynD _ vars typ)) =
@@ -59,9 +60,9 @@ deriveSerialize' typ0 = do
                  goClauses tname vals' vars cons subst
                [] ->
                  let typ = subst (compose (ConT famname : fmap (VarT . toName) vars)) in
-                 error $ "deriveSerialize " ++ pprint typ0 ++ "\n    Data family instance could not be reified: " ++ pprint typ)
+                 error $ pprint loc ++ ": deriveSerialize " ++ pprint typ0 ++ "\n    Data family instance could not be reified: " ++ pprint typ)
       goInfo _typ0 _tname _vals info =
-          error $ "deriveSerialize " ++ pprint typ0 ++ "\n    unexpected info: " ++ show info
+          error $ pprint loc ++ ": deriveSerialize " ++ pprint typ0 ++ "\n    unexpected info: " ++ show info
 
       goClauses :: Name -> [Type] -> [TyVarBndr] -> [Con] -> (Type -> Type) -> Q Dec
       goClauses tname vals vars cons subst = do
@@ -76,7 +77,8 @@ deriveSerialize' typ0 = do
                                                         [con] -> conGet' con
                                                         _ -> [|getWord8 >>= \i -> $(caseE [|i|]
                                                                                       (map conMatch (zip [0..] cons) ++
-                                                                                       [newName "n" >>= \n -> match (varP n) (normalB [|error $ "deriveSerialize - unexpected tag: " ++ show $(varE n)|]) []]))|])) []]
+                                                                                       [newName "n" >>= \n -> match (varP n) (normalB [|error $ pprint loc ++ ": deriveSerialize - unexpected tag " ++ show $(varE n) ++
+                                                                                                                                                 " decoding " ++ show tname ++ " (expected 0.." ++ show (length cons) ++ ")"|]) []]))|])) []]
           constraints <- toList <$> deriveConstraints 0 ''Serialize tname vals'
           instanceD
             (pure constraints)
